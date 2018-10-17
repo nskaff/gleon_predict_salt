@@ -1,5 +1,5 @@
 
-Spce and NLA data. 
+Space and NLA data. 
 author: "Shannon LaDeau"
 date: "October 2018"
 
@@ -17,7 +17,7 @@ library(rjags)
 Data used are from the US National Lakes Assessment: https://www.epa.gov/national-aquatic-resource-surveys/nla
 The focal response variable here is chloride
 
-```{r}
+```{r setup}
 dat = read.csv("C:/Users/ladeaus/Documents/GLEON 2017/NLA/GLEON NLA data.csv", header=T)
 
 str(dat)
@@ -30,9 +30,17 @@ for(i in 1:nrow(dat)){  depth[i] = dat$DEPTH_M.mean[i] - mean(dat$DEPTH_M.mean,n
 temp=rep(0,nrow(dat))
 for(i in 1:nrow(dat)){  temp[i] = dat$TEMP_C.mean[i] - mean(dat$TEMP_C.mean,na.rm=T) } #centered predictor
 
-```
+urban=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  urban[i] = 0.01 * (dat$PCT_DEVELOPED_BSN[i] - mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) } #centered predictor - as proportion
 
-Look at the data y and the distribution of predictor. Below I proceed with a lognormal assumption. Note that there are also missing y measurements.
+lat=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  lat[i] = dat$LAT_DD[i] - mean(dat$LAT_DD,na.rm=T) } #centered predictor
+
+```
+If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
+
+other useful code: 
+Line 143 - confirm convergence 
 
 
 ##The Simple Model
@@ -135,7 +143,7 @@ plot(jags.out)
 
 ```
 
-Confirm convergence and define burn-in
+Confirm convergence and define burn-in. ONCE you have a model you like you should do the steps below to make sure model is converged AND that you only use samples from posterior afer convergence.
 
 
 ```{r}
@@ -190,7 +198,7 @@ One 'next step' would be to add a random effect for region. This makes sense if 
 ```{r}
 NormMean.RE <- "
 model {
-  mu0 ~ dnorm(prior.mean,T) # prior on the mean 
+  mu0 ~ dnorm(mu.prior,T) # prior on the mean 
   S ~ dgamma(a_obs,r_obs) #prior precision, data model
 
   for(i in 1:N){
@@ -211,7 +219,7 @@ Enter data - with regional indicator. Set initial conditions
  
 sigma=1.5
 data = list(N=length(y),y = log(y), region = region, maxR=max(region), ## data
-            prior.mean = 7.2, ## prior mean
+            mu.prior = 0, ## prior mean
             T = 1/sigma^2, ## prior precision
           a_obs = 0.01, r_obs= 0.01 )## prior mean precision 
 
@@ -227,7 +235,7 @@ for(i in 1:nchain){
 
 ##Run the model
 ```{r}
-j.model   <- jags.model (file = textConnection(NormMean.RE),
+j.model2   <- jags.model (file = textConnection(NormMean.RE),
                              data = data,
                              inits = inits,
                              n.chains = 3)
@@ -240,6 +248,7 @@ jags.out   <- coda.samples (model = j.model,
                                 n.iter = 5000)
 
 
+dic.samples(j.model2,2500)
 
 plot(jags.out)
 ```
@@ -287,7 +296,6 @@ tau_reg  ~ dgamma(0.01,0.01) ##prior precision,  random effect
  
 sigma=1.5
 data = list(N=length(y),y = log(y), depth = depth, region = region, maxR=max(region), ## data
-            prior.dep = 0, ## prior mean
             tau.beta0 = 1/sigma^2, ## prior precision
             tau.beta1=1/0.01,
           a_obs = 0.01, r_obs= 0.01 )## prior mean precision 
@@ -324,4 +332,103 @@ out<-as.matrix(jags.out)
 summary(out)
 ```
 
+```{r}
+jags.out2   <- coda.samples (model = j.model,
+                            variable.names = c("depth"),
+                                n.iter = 1000)
+
+out<-as.matrix(jags.out2)
+
+dic.samples(j.model,5000)
+
+hist(out[,125])  ###look at histogram of first missing depth value - row 125
+
+ dep.mean = rep(0,length(depth))
+
+for (i in 1:length(depth)){dep.mean[i] = mean(out[,i])}
+hist(dep.mean[125])
+barplot(dep.mean)
+```
+
+add Multiple Predictor Variables
+
+```{r}
+NormMean.Cov.RE <- "
+model {
+  beta0 ~ dnorm(0,tau.beta0) # priors  
+  beta1~ dnorm(0,tau.beta1)
+  beta2~ dnorm(0,tau.beta2)
+
+  S ~ dgamma(a_obs,r_obs) #prior precision, data model
+
+  for(i in 1:N){
+    mu[i] <- beta0 + beta1 * lat[i] + beta2 * urban[i] + reg[region[i]] # process model
+    y[i] ~ dnorm(mu[i],S) #data model
+    urban[i]~dnorm(0,50)  ##prior based on existing summary
+
+  }
+ for(r in 1:maxR){  
+    reg[r] ~ dnorm(0,tau_reg)
+ }
+tau_reg  ~ dgamma(0.01,0.01) ##prior precision,  random effect
+}
+"
+```
+
+
+```{r}
+
+data = list(N=length(y),y = log(y), region = region, maxR=max(region), lat=lat,urban=urban,
+            tau.beta0=1/0.01,tau.beta1=1/0.01, tau.beta2=1/0.01,
+          a_obs = 0.01, r_obs= 0.01 )## prior mean precision 
+
+nchain = 3
+inits <- list()
+for(i in 1:nchain){
+  y.samp = sample(log(y),length(y),replace=TRUE)
+  inits[[i]] <- list(S=1/var((y.samp)), beta0=mean(y.samp), tau_reg=1.2)
+}
+
+```
+
+
+##Run the model
+```{r}
+j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
+                             data = data,
+                             inits = inits,
+                             n.chains = 3)
+
+```
+
+```{r}
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c("beta0","beta1","beta2","S","tau_reg"),
+                                n.iter = 5000)
+
+
+
+plot(jags.out)
+
+out<-as.matrix(jags.out)
+summary(out)
+```
+
+```{r}
+jags.out2   <- coda.samples (model = j.model,
+                            variable.names = c("depth"),
+                                n.iter = 1000)
+
+out<-as.matrix(jags.out2)
+
+dic.samples(j.model,5000)  ##Deviance Information Criterion
+
+hist(out[,125])  ###look at histogram of first missing depth value - row 125
+
+ dep.mean = rep(0,length(depth))
+
+for (i in 1:length(depth)){dep.mean[i] = mean(out[,i])}
+hist(dep.mean[125])
+barplot(dep.mean)
+```
 
