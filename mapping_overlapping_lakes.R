@@ -56,4 +56,4 @@ ggplot() + geom_histogram(data=chloride_spatial@data[chloride_spatial@data$chlor
 ggplot() + geom_histogram(data=pract_data, aes(x=Relative.Catchment.Size), fill="black") + scale_x_continuous("Relative Catchment Size", trans="log10") + theme(
   plot.margin = margin(12, 12, 12, 12))
 
-ggplot() + 
+ggplot() + geom_points()
