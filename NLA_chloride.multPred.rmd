@@ -11,6 +11,7 @@ rm(list = ls())  #remove anything stored in workspace from previous exercises
 #install.packages("tidyverse")
 #library(readxl)
 library(rjags)
+library(tidyverse)
 ```
 
 
@@ -18,26 +19,25 @@ Data used are from the US National Lakes Assessment: https://www.epa.gov/nationa
 The focal response variable here is chloride
 
 ```{r setup}
-dat = read.csv("C:/Users/ladeaus/Documents/GLEON 2017/NLA/GLEON NLA data.csv", header=T)
-
-
-str(dat)
+dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv")
 
 y = dat$CHLORIDE_MGL  #focal response variable
 
 region= dat$OMER_L3_ECO  #ecological region indicator
 
-depth=rep(0,nrow(dat))
-for(i in 1:nrow(dat)){  depth[i] = dat$DEPTH_M.mean[i] - mean(dat$DEPTH_M.mean,na.rm=T) } #centered predictor
+depth = dat$DEPTH_M.mean - mean(dat$DEPTH_M.mean,na.rm=T) #centered predictor
 
-temp=rep(0,nrow(dat))
-for(i in 1:nrow(dat)){  temp[i] = dat$TEMP_C.mean[i] - mean(dat$TEMP_C.mean,na.rm=T) } #centered predictor
 
-urban=rep(0,nrow(dat))
-for(i in 1:nrow(dat)){  urban[i] = 0.01 * (dat$PCT_DEVELOPED_BSN[i] - mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) } #centered predictor - as proportion
+temp = dat$TEMP_C.mean - mean(dat$TEMP_C.mean,na.rm=T)#centered predictor
 
-lat=rep(0,nrow(dat))
-for(i in 1:nrow(dat)){  lat[i] = dat$LAT_DD[i] - mean(dat$LAT_DD,na.rm=T) } #centered predictor
+
+urban = 0.01 * (dat$PCT_DEVELOPED_BSN- mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
+
+ag = 0.01 * (dat$PCT_AGRIC_BSN- mean(dat$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
+
+lat=dat$LAT_DD - mean(dat$LAT_DD,na.rm=T)  #centered predictor
+
+resT = dat$Residence_Time - mean(dat$Residence_Time, na.rm=T)
 
 ```
 If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
@@ -74,9 +74,10 @@ model {
   tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
 
   for(i in 1:N){
-    mu[i] <- beta0 + beta1 * lat[i] + beta2 * urban[i] + reg[region[i]] # process model
+    mu[i] <- beta0 + beta1 * resT[i] + beta2 * urban[i] + reg[region[i]] # process model
     y[i] ~ dnorm(mu[i],tau.obs) #data model
     urban[i]~dnorm(0,50)  ##prior based on existing summary
+    resT[i]~dnorm(0,50)
 
   }
  for(r in 1:maxR){  
@@ -91,9 +92,9 @@ Define the data
 
 ```{r}
 
-data = list(N=length(y),y = log(y), region = region, maxR=max(region), lat=lat,urban=urban,
+data = list(N=length(y),y = log(y), region = region, maxR=max(region), resT=resT,urban=urban,
             tau.beta0=1/0.01,tau.beta1=1/0.01, tau.beta2=1/0.01,
-          a_obs = 0.01, r_obs= 0.01 )## prior mean precision 
+          a_obs = 0.01, r_obs= 0.01 ) ## prior mean precision 
 
 nchain = 3  # num chains for MCMC
 
@@ -118,6 +119,7 @@ j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
 
 ```{r}
 jags.out   <- coda.samples (model = j.model,
+                              
                             variable.names = c("beta0","beta1","beta2","tau.obs","tau_reg"),
                                 n.iter = 5000)
 
@@ -137,18 +139,18 @@ If you want to check out the estimates for the unknown predictor or response var
 ```{r}
 
 jags.out2   <- coda.samples (model = j.model,
-                            variable.names = c("urban"),
+                            variable.names = c("resT"),
                                 n.iter = 1000)
 
 out<-as.matrix(jags.out2)
 
 
-hist(out[,125])  ###look at histogram of first missing depth value - row 125
+hist(out[,2070])  ###look at histogram of first missing depth value - row 2070
 
- dep.mean = rep(0,length(depth))
+ dep.mean = rep(0,length(resT))
 
 for (i in 1:length(depth)){dep.mean[i] = mean(out[,i])}
-hist(dep.mean[125])
+hist(dep.mean[2070])
 barplot(dep.mean)
 ```
 
