@@ -18,7 +18,6 @@ chloride_spatial<-SpatialPointsDataFrame(coords = chloride_2007_2012[,c("LON_DD8
 #plotting chloride
 chloride_spatial@data$log_X2012_Chloride<-log(chloride_spatial@data$X2012_Chloride)
 chloride_spatial@data$log_X2007_Chloride<-log(chloride_spatial@data$X2007_Chloride)
-
 chloride_spatial@data$log_chloride_Difference<-chloride_spatial@data$chloride_Difference
 
 #2012
