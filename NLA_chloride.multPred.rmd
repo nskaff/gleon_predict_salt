@@ -1,0 +1,154 @@
+
+Space and NLA data. 
+author: "Shannon LaDeau"
+date: "October 2018"
+
+---
+
+```{r}
+rm(list = ls())  #remove anything stored in workspace from previous exercises
+
+#install.packages("tidyverse")
+#library(readxl)
+library(rjags)
+```
+
+
+Data used are from the US National Lakes Assessment: https://www.epa.gov/national-aquatic-resource-surveys/nla
+The focal response variable here is chloride
+
+```{r setup}
+dat = read.csv("C:/Users/ladeaus/Documents/GLEON 2017/NLA/GLEON NLA data.csv", header=T)
+
+
+str(dat)
+
+y = dat$CHLORIDE_MGL  #focal response variable
+
+region= dat$OMER_L3_ECO  #ecological region indicator
+
+depth=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  depth[i] = dat$DEPTH_M.mean[i] - mean(dat$DEPTH_M.mean,na.rm=T) } #centered predictor
+
+temp=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  temp[i] = dat$TEMP_C.mean[i] - mean(dat$TEMP_C.mean,na.rm=T) } #centered predictor
+
+urban=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  urban[i] = 0.01 * (dat$PCT_DEVELOPED_BSN[i] - mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) } #centered predictor - as proportion
+
+lat=rep(0,nrow(dat))
+for(i in 1:nrow(dat)){  lat[i] = dat$LAT_DD[i] - mean(dat$LAT_DD,na.rm=T) } #centered predictor
+
+```
+If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
+
+Confirm convergence and define burn-in. ONCE you have a model you like you should do the steps below to make sure model is converged AND that you only use samples from posterior afer convergence.
+
+##ignore this code for now
+```{r}
+gelman.diag(jags.out)
+GBR <- gelman.plot(jags.out)
+
+```
+##ignore this code for now
+```{r}
+## determine the first iteration after convergence
+burnin <- GBR$last.iter[tail(which(GBR$shrink[,,2] > 1.1),1)+1]## check for no burn-in case
+if(length(burnin) == 0) burnin = 1
+## remove burn-in
+jags.burn <- window(jags.out,start=burnin)
+## check diagnostics post burn-in
+gelman.diag(jags.burn)
+plot(jags.burn)
+```
+
+Model with multiple predictor variables 
+
+```{r}
+NormMean.Cov.RE <- "
+model {
+  beta0 ~ dnorm(0,tau.beta0) # priors  
+  beta1~ dnorm(0,tau.beta1)
+  beta2~ dnorm(0,tau.beta2)
+
+  tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
+
+  for(i in 1:N){
+    mu[i] <- beta0 + beta1 * lat[i] + beta2 * urban[i] + reg[region[i]] # process model
+    y[i] ~ dnorm(mu[i],tau.obs) #data model
+    urban[i]~dnorm(0,50)  ##prior based on existing summary
+
+  }
+ for(r in 1:maxR){  
+    reg[r] ~ dnorm(0,tau_reg)
+ }
+tau_reg  ~ dgamma(0.01,0.01) ##prior precision,  random effect
+}
+"
+```
+
+Define the data
+
+```{r}
+
+data = list(N=length(y),y = log(y), region = region, maxR=max(region), lat=lat,urban=urban,
+            tau.beta0=1/0.01,tau.beta1=1/0.01, tau.beta2=1/0.01,
+          a_obs = 0.01, r_obs= 0.01 )## prior mean precision 
+
+nchain = 3  # num chains for MCMC
+
+##Set-up initial values - okay to use data to identify good starting points
+inits <- list()
+for(i in 1:nchain){
+  y.samp = sample(log(y),length(y),replace=TRUE)  #resamples orig data 
+  inits[[i]] <- list(tau.obs=1/var((y.samp)), beta0=mean(y.samp), tau_reg=1.2)
+}
+
+```
+
+
+##Run the model
+```{r}
+j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
+                             data = data,
+                             inits = inits,
+                             n.chains = 3)
+
+```
+
+```{r}
+jags.out   <- coda.samples (model = j.model,
+                            variable.names = c("beta0","beta1","beta2","tau.obs","tau_reg"),
+                                n.iter = 5000)
+
+plot(jags.out)
+
+out<-as.matrix(jags.out)
+summary(out)
+
+#DIC is easy way to look at model fit (generally look for decrease by 10 or more)
+#dic.samples(j.model,1000)  ##Deviance Information Criterion
+
+```
+
+
+If you want to check out the estimates for the unknown predictor or response variables, it is easiest to run model again and just save those...
+
+```{r}
+
+jags.out2   <- coda.samples (model = j.model,
+                            variable.names = c("urban"),
+                                n.iter = 1000)
+
+out<-as.matrix(jags.out2)
+
+
+hist(out[,125])  ###look at histogram of first missing depth value - row 125
+
+ dep.mean = rep(0,length(depth))
+
+for (i in 1:length(depth)){dep.mean[i] = mean(out[,i])}
+hist(dep.mean[125])
+barplot(dep.mean)
+```
+
