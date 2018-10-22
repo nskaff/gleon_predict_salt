@@ -1,4 +1,6 @@
 ###random forest for chloride
+install.packages("forestFloor","randomForest", "tidyverse")
+
 library(forestFloor)
 library(randomForest)
 library(tidyverse)
