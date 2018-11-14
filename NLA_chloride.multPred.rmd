@@ -19,7 +19,7 @@ Data used are from the US National Lakes Assessment: https://www.epa.gov/nationa
 The focal response variable here is chloride
 
 ```{r setup}
-dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv")
+dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs packages above installed
 
 y = dat$CHLORIDE_MGL  #focal response variable
 
@@ -34,6 +34,8 @@ temp = dat$TEMP_C.mean - mean(dat$TEMP_C.mean,na.rm=T)#centered predictor
 urban = 0.01 * (dat$PCT_DEVELOPED_BSN- mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
 
 ag = 0.01 * (dat$PCT_AGRIC_BSN- mean(dat$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
+
+forest = 0.01 * (dat$PCT_FOREST_BSN- mean(dat$PCT_FOREST_BSN, na.rm=T)) #centered predictor - as proportion
 
 lat=dat$LAT_DD - mean(dat$LAT_DD,na.rm=T)  #centered predictor
 
@@ -70,14 +72,16 @@ model {
   beta0 ~ dnorm(0,tau.beta0) # priors  
   beta1~ dnorm(0,tau.beta1)
   beta2~ dnorm(0,tau.beta2)
+  beta3~ dnorm(0,tau.beta3)
 
   tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
 
   for(i in 1:N){
-    mu[i] <- beta0 + beta1 * resT[i] + beta2 * urban[i] + reg[region[i]] # process model
+    mu[i] <- beta0 + beta1 * urban[i]+ beta2 *ag[i] + beta3*forest[i] + reg[region[i]] # process model 
     y[i] ~ dnorm(mu[i],tau.obs) #data model
     urban[i]~dnorm(0,50)  ##prior based on existing summary
-    resT[i]~dnorm(0,50)
+    ag[i]~dnorm(0,50)
+    forest[i]~dnorm(0,50)
 
   }
  for(r in 1:maxR){  
@@ -92,8 +96,8 @@ Define the data
 
 ```{r}
 
-data = list(N=length(y),y = log(y), region = region, maxR=max(region), resT=resT,urban=urban,
-            tau.beta0=1/0.01,tau.beta1=1/0.01, tau.beta2=1/0.01,
+data = list(N=length(y),y = log(y), region = region, maxR=max(region),  urban=urban, ag=ag, forest=forest,
+            tau.beta0=1/0.01, tau.beta1=1/0.01, tau.beta2=1/0.01, tau.beta3=1/0.01,
           a_obs = 0.01, r_obs= 0.01 ) ## prior mean precision 
 
 nchain = 3  # num chains for MCMC
@@ -120,7 +124,7 @@ j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
 ```{r}
 jags.out   <- coda.samples (model = j.model,
                               
-                            variable.names = c("beta0","beta1","beta2","tau.obs","tau_reg"),
+                            variable.names = c("beta0","beta1", "beta2", "beta3", "tau.obs","tau_reg"), 
                                 n.iter = 5000)
 
 plot(jags.out)
@@ -129,7 +133,7 @@ out<-as.matrix(jags.out)
 summary(out)
 
 #DIC is easy way to look at model fit (generally look for decrease by 10 or more)
-#dic.samples(j.model,1000)  ##Deviance Information Criterion
+dic.samples(j.model,1000)  ##Deviance Information Criterion
 
 ```
 
