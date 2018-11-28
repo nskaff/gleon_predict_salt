@@ -188,6 +188,12 @@ RMSE = function(pred, obs){
 }
 rmse<-RMSE(posterior_means$mu,posterior_means$y)
 
+###calculating training back transformed rmse###
+RMSE_back = function(pred, obs){
+  sqrt(mean((exp(pred) - exp(obs))^2))
+}
+rmse_back<-RMSE_back(posterior_means$mu,posterior_means$y)
+
 
 #organizing the posterior parameter means
 B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
@@ -211,8 +217,17 @@ RMSE = function(pred, obs){
 rmse_test<-RMSE(y_hat_conditional,log(y.test))
 
 
+###calculating testing rmse back transformed###
+RMSE_back = function(pred, obs){
+  sqrt(mean((exp(pred) - exp(obs))^2, na.rm=T))
+}
+rmse_back_test<-RMSE_back(y_hat_conditional,log(y.test))
+
+
+
+
 ##creating a table with training and testing performance
-fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e" ,"R^2"), Train=c(rmse,exp(rmse),rsq), Test=c(rmse_test,exp(rmse_test),rsq_conditional))
+fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e" ,"R^2"), Train=c(rmse,rmse_back,rsq), Test=c(rmse_test,rmse_back_test,rsq_conditional))
 
 fit.tbl                 
 grid.table(fit.tbl)
