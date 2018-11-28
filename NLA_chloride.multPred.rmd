@@ -10,8 +10,10 @@ rm(list = ls())  #remove anything stored in workspace from previous exercises
 
 #install.packages("tidyverse")
 #library(readxl)
+library(readr)
 library(rjags)
 library(tidyverse)
+library(gridExtra)
 ```
 
 
@@ -19,29 +21,58 @@ Data used are from the US National Lakes Assessment: https://www.epa.gov/nationa
 The focal response variable here is chloride
 
 ```{r setup}
-dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs packages above installed
+dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs readr package installed
 
-y = dat$CHLORIDE_MGL  #focal response variable
+##splitting data into training and testing set, with 80% of data in the training set
+dat$id <- 1:nrow(dat)
+train <- dat %>% dplyr::sample_frac(.8)
+test  <- dplyr::anti_join(dat, train, by = 'id')
 
-region= dat$OMER_L3_ECO  #ecological region indicator
+y = train$CHLORIDE_MGL  #focal response variable
 
-depth = dat$DEPTH_M.mean - mean(dat$DEPTH_M.mean,na.rm=T) #centered predictor
+region= train$OMER_L3_ECO  #ecological region indicator
+
+depth = train$DEPTH_M.mean - mean(train$DEPTH_M.mean,na.rm=T) #centered predictor
 
 
-temp = dat$TEMP_C.mean - mean(dat$TEMP_C.mean,na.rm=T)#centered predictor
+temp = train$TEMP_C.mean - mean(train$TEMP_C.mean,na.rm=T)#centered predictor
 
 
-urban = 0.01 * (dat$PCT_DEVELOPED_BSN- mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
+urban = 0.01 * (train$PCT_DEVELOPED_BSN- mean(train$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
 
-ag = 0.01 * (dat$PCT_AGRIC_BSN- mean(dat$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
+ag = 0.01 * (train$PCT_AGRIC_BSN- mean(train$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
 
-forest = 0.01 * (dat$PCT_FOREST_BSN- mean(dat$PCT_FOREST_BSN, na.rm=T)) #centered predictor - as proportion
+forest = 0.01 * (train$PCT_FOREST_BSN- mean(train$PCT_FOREST_BSN, na.rm=T)) #centered predictor - as proportion
 
-lat=dat$LAT_DD - mean(dat$LAT_DD,na.rm=T)  #centered predictor
+lat=train$LAT_DD - mean(train$LAT_DD,na.rm=T)  #centered predictor
 
-resT = dat$Residence_Time - mean(dat$Residence_Time, na.rm=T)
+resT = train$Residence_Time - mean(train$Residence_Time, na.rm=T)
 
+####setting up testing parameters
+y.test = test$CHLORIDE_MGL  #focal response variable
+
+region.test= test$OMER_L3_ECO  #ecological region indicator
+
+depth.test = test$DEPTH_M.mean - mean(test$DEPTH_M.mean,na.rm=T) #centered predictor
+
+
+temp.test = test$TEMP_C.mean - mean(test$TEMP_C.mean,na.rm=T)#centered predictor
+
+
+urban.test = 0.01 * (test$PCT_DEVELOPED_BSN- mean(test$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
+
+ag.test = 0.01 * (test$PCT_AGRIC_BSN- mean(test$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
+
+forest.test = 0.01 * (test$PCT_FOREST_BSN- mean(test$PCT_FOREST_BSN, na.rm=T)) #centered predictor - as proportion
+
+lat.test=test$LAT_DD - mean(test$LAT_DD,na.rm=T)  #centered predictor
+
+resT.test = test$Residence_Time - mean(test$Residence_Time, na.rm=T)
 ```
+
+
+
+
 If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
 
 Confirm convergence and define burn-in. ONCE you have a model you like you should do the steps below to make sure model is converged AND that you only use samples from posterior afer convergence.
@@ -111,7 +142,6 @@ for(i in 1:nchain){
 
 ```
 
-
 ##Run the model
 ```{r}
 j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
@@ -137,13 +167,74 @@ dic.samples(j.model,1000)  ##Deviance Information Criterion
 
 ```
 
+Getting predicted values and calculating training and testing R2 and rmse. This should be double checked..not totally sure of myself here
+
+```{r}
+jags.out   <- jags.samples (model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3", "reg","mu", "y"),  n.iter = 5000)
+
+#taking the mean of the posterior for each parameter estimated
+posterior_means <- lapply(jags.out, apply, 1, "mean")
+
+
+###calculating training R2###
+rss <- sum((posterior_means$mu- posterior_means$y) ^ 2, na.rm=T)  ## residual sum of squares
+tss<- sum((posterior_means$y - mean(posterior_means$y, na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
+rsq<- 1 - rss/tss
+
+
+###calculating training rmse###
+RMSE = function(pred, obs){
+  sqrt(mean((pred - obs)^2))
+}
+rmse<-RMSE(posterior_means$mu,posterior_means$y)
+
+
+#organizing the posterior parameter means
+B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
+
+#organizing the random intercepts for each region
+R.intercept<- as.matrix(unlist(posterior_means[c("reg")]))
+
+###predicting from test set
+y_hat_conditional<- B[1,] + B[2,] * urban.test+ B[3,]*ag.test + B[4,]*forest.test + R.intercept[region.test]
+
+#calculating predictive R
+rss_cond <- sum((y_hat_conditional - log(y.test)) ^ 2, na.rm=T)  ## residual sum of squares
+tss_cond <- sum((log(y.test) - mean(log(y.test), na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
+rsq_conditional <- 1 - rss_cond/tss_cond
+
+
+###calculating testing rmse###
+RMSE = function(pred, obs){
+  sqrt(mean((pred - obs)^2, na.rm=T))
+}
+rmse_test<-RMSE(y_hat_conditional,log(y.test))
+
+
+##creating a table with training and testing performance
+fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e" ,"R^2"), Train=c(rmse,exp(rmse),rsq), Test=c(rmse_test,exp(rmse_test),rsq_conditional))
+
+fit.tbl                 
+grid.table(fit.tbl)
+
+########not sure how to calculate a marginal R square (not including the intercept) in a bayesian framework...help..
+
+#another way of calculating predictive R2, essentially the same result
+#cor(y_hat_conditional,log(y.test), use="pairwise.complete.obs")^2
+
+
+
+```
+
+
+
 
 If you want to check out the estimates for the unknown predictor or response variables, it is easiest to run model again and just save those...
 
 ```{r}
 
 jags.out2   <- coda.samples (model = j.model,
-                            variable.names = c("resT"),
+                            variable.names = c("urban"),
                                 n.iter = 1000)
 
 out<-as.matrix(jags.out2)
