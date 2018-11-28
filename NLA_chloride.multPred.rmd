@@ -251,7 +251,7 @@ mae_back_test<-MAE_back(y_hat_conditional,log(y.test))
 fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
 
 fit.tbl                 
-grid.table(fit.tbl)
+#grid.table(fit.tbl)
 
 ########not sure how to calculate a marginal R square (not including the intercept) in a bayesian framework...help..
 
