@@ -194,6 +194,14 @@ RMSE_back = function(pred, obs){
 }
 rmse_back<-RMSE_back(posterior_means$mu,posterior_means$y)
 
+####calculating training back transformed median absolute error, which doesn't overweight huge errors on outliers like rmse does
+#https://scikit-learn.org/stable/modules/model_evaluation.html#median-absolute-error
+MAE_back <- function(pred , obs)
+{
+    median(abs(exp(pred) - exp(obs)))
+}
+
+mae_back<-MAE_back(posterior_means$mu,posterior_means$y)
 
 #organizing the posterior parameter means
 B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
@@ -224,10 +232,19 @@ RMSE_back = function(pred, obs){
 rmse_back_test<-RMSE_back(y_hat_conditional,log(y.test))
 
 
+####calculating testing back transformed median absolute error, which doesn't overweight huge errors on outliers like rmse does
+#https://scikit-learn.org/stable/modules/model_evaluation.html#median-absolute-error
+MAE_back <- function(pred , obs)
+{
+    median(abs(exp(pred) - exp(obs)), na.rm=T)
+}
+
+mae_back_test<-MAE_back(y_hat_conditional,log(y.test))
+
 
 
 ##creating a table with training and testing performance
-fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e" ,"R^2"), Train=c(rmse,rmse_back,rsq), Test=c(rmse_test,rmse_back_test,rsq_conditional))
+fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
 
 fit.tbl                 
 grid.table(fit.tbl)
