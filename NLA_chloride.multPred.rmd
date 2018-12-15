@@ -6,7 +6,7 @@ date: "October 2018"
 ---
 
 ```{r}
-rm(list = ls())  #remove anything stored in workspace from previous exercises
+#rm(list = ls())  #remove anything stored in workspace from previous exercises
 
 #install.packages("tidyverse")
 #library(readxl)
@@ -24,7 +24,7 @@ The focal response variable here is chloride
 dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs readr package installed
 
 #removing some insane outliers where cl is greater than 10,000 mg/l
-#dat<-dat[which(dat$CHLORIDE_MGL<10000),]
+dat<-dat[which(dat$CHLORIDE_MGL<10000),]
 
 
 ##splitting data into training and testing set, with 80% of data in the training set
@@ -248,7 +248,7 @@ mae_back_test<-MAE_back(y_hat_conditional,log(y.test))
 
 
 ##creating a table with training and testing performance
-fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
+fit.tbl<-data.frame(Level_3_Eco=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
 
 fit.tbl                 
 #grid.table(fit.tbl)
