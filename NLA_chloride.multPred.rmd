@@ -13,7 +13,9 @@ date: "October 2018"
 library(readr)
 library(rjags)
 library(tidyverse)
+library(readr)
 library(gridExtra)
+library(dplyr)
 ```
 
 
