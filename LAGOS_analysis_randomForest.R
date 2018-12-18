@@ -38,7 +38,7 @@ test  <- dplyr::anti_join(dat_rf, train, by = 'id')
 
 #random forest model
 #warning this could take a while -- ~10min
-rf_model<-randomForest(x = cbind(log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(2,4:6,9:18)]+1),train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(19:22)]), y=log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,1]+1), keep.inbag = T, importance = T, mtry=length(log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(2,4:6,9:22)]+1)), sampsize = 10000, ntree=500)
+rf_model<-randomForest(x = cbind(log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(2,4:6,9:18)]+1),train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(19:22)]), y=log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,1]+1), keep.inbag = T, importance = T, mtry=length(log(train[complete.cases(train[,c(1,2,4:6,9:22)]),][,c(2,4:6,9:22)]+1)), sampsize = 10000, ntree=500, strata = as.factor(train[complete.cases(train[,c(1,2,4:6,9:22)]),"lagoslakeid"]))
 
 rf_model  
 varImpPlot(rf_model)
