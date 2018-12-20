@@ -2,6 +2,7 @@
 Space and NLA data. 
 author: "Shannon LaDeau"
 date: "October 2018"
+Update: "Hilary Dugan - Dec 20 2018"
 
 library(readr)
 library(rjags)
@@ -12,14 +13,22 @@ library(dplyr)
 
 # Data used are from the US National Lakes Assessment: https://www.epa.gov/national-aquatic-resource-surveys/nla
 # The focal response variable here is chloride
-dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs readr package installed
-dat = read_csv("data/LAGOS_ChlorideCovariates.csv") 
+# dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv") # note: read_csv needs readr package installed
+datin = read_csv("data/LAGOS_ChlorideCovariates.csv") 
 
 #removing some insane outliers where cl is greater than 10,000 mg/l
-dat <- dat %>% filter(Chloride < 10000 & Chloride >=0) %>%
+dat <- datin %>% filter(Chloride < 10000 & Chloride >=0) %>%
   mutate(Chloride = ifelse(Chloride == 0, 0.0001, Chloride)) %>%
-  mutate(region = parse_number(dat$edu_zoneid)) %>%
-  mutate(region = ifelse(is.na(region),1,region))
+  mutate(edu_zoneid = ifelse(edu_zoneid == 'OUT_OF_EDU',1,edu_zoneid)) %>% #change regions to numbers
+  mutate(region = parse_number(edu_zoneid))  %>%
+  filter(Date > as.Date('2000-01-01')) %>%
+  group_by(lagoslakeid) %>% 
+  summarise_all(funs(first))
+
+table(dat$lakeconnection)
+ggplot(dat, aes(x=lakeconnection, y=logChloride)) + 
+  geom_boxplot()
+plot(log(dat$maxdepth),log(dat$Chloride))
 
 ##splitting data into training and testing set, with 80% of data in the training set
 dat$id <- 1:nrow(dat)
@@ -76,7 +85,7 @@ beta3~ dnorm(0,tau.beta3)
 tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
 
 for(i in 1:N){
-  mu[i] <- beta0 + beta1 * urban[i]+ beta2 *ag[i] + beta3*forest[i] + reg[region[i]] # process model 
+  mu[i] <- beta0 + beta1*urban[i]+ beta2*ag[i] + beta3*forest[i] + reg[region[i]] # process model 
   y[i] ~ dnorm(mu[i],tau.obs) #data model
   urban[i]~dnorm(0,50)  ##prior based on existing summary
   ag[i]~dnorm(0,50)
@@ -109,7 +118,7 @@ data = data,
 inits = inits,
 n.chains = 3)
 
-jags.out <- coda.samples (model = j.model,
+jags.out <- coda.samples(model = j.model,
   variable.names = c("beta0","beta1", "beta2", "beta3", "tau.obs","tau_reg"), 
   n.iter = 5000)
 
@@ -123,43 +132,47 @@ dic.samples(j.model,1000)  ##Deviance Information Criterion
 
 # Getting predicted values and calculating training and testing R2 and rmse. This should be double checked..not totally sure of myself here
 # plot prediction interval from mu and see if prediction y_pred is outside the prediction interval -- pull out the quantiles for the mu and look to see.
-jags.out  <- jags.samples (model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3", "reg","mu", "y"),  n.iter = 4000)
+jags.out2  <- jags.samples(model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3", "reg","mu", "y"),  n.iter = 5000)
 
 #taking the mean of the posterior for each parameter estimated
-posterior_means <- lapply(jags.out, apply, 1, "mean")
+posterior_means <- lapply(jags.out2, apply, 1, "mean")
 
 
 
 ###calculating training R2###
 rss <- sum((posterior_means$mu- posterior_means$y) ^ 2, na.rm=T)  ## residual sum of squares
-tss<- sum((posterior_means$y - mean(posterior_means$y, na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
-rsq<- 1 - rss/tss
-
+tss <- sum((posterior_means$y - mean(posterior_means$y, na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
+rsq <- 1 - rss/tss
 
 ###calculating training rmse###
 RMSE = function(pred, obs){
 sqrt(mean((pred - obs)^2))
 }
-rmse<-RMSE(posterior_means$mu,posterior_means$y)
+rmse <- RMSE(posterior_means$mu,posterior_means$y)
+
 
 ###calculating training back transformed rmse###
 RMSE_back = function(pred, obs){
 sqrt(mean((exp(pred) - exp(obs))^2))
 }
-rmse_back<-RMSE_back(posterior_means$mu,posterior_means$y)
+rmse_back <- RMSE_back(posterior_means$mu,posterior_means$y)
+
+# out = data.frame(mu = posterior_means$mu,y = posterior_means$y)
+# out$regions = train$region
+# out$cols = viridis(91)[train$region]
+# ggplot(data=out) + geom_point(aes(y=mu, x=y, color = regions)) + 
+#   scale_color_gradientn(colours = viridis(n=91))
 
 ####calculating training back transformed median absolute error, which doesn't overweight huge errors on outliers like rmse does
 #https://scikit-learn.org/stable/modules/model_evaluation.html#median-absolute-error
-MAE_back <- function(pred , obs)
-{
-  median(abs(exp(pred) - exp(obs)))
+MAE_back <- function(pred , obs) {
+  median(abs(exp(pred) - exp(obs))) 
 }
 
-mae_back<-MAE_back(posterior_means$mu,posterior_means$y)
+mae_back <- MAE_back(posterior_means$mu,posterior_means$y)
 
 #organizing the posterior parameter means
 B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
-
 
 #organizing the random intercepts for each region
 R.intercept<- as.matrix(unlist(posterior_means[c("reg")]))
@@ -168,9 +181,6 @@ R.intercept<- as.matrix(unlist(posterior_means[c("reg")]))
 y_hat_conditional<- B[1,] + B[2,] * urban.test+ B[3,]*ag.test + B[4,]*forest.test + R.intercept[region.test]
 
 #generating a credible interval on predicted values
-
-
-
 #calculating predictive R
 rss_cond <- sum((y_hat_conditional - log(y.test)) ^ 2, na.rm=T)  ## residual sum of squares
 tss_cond <- sum((log(y.test) - mean(log(y.test), na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
@@ -203,7 +213,7 @@ mae_back_test<-MAE_back(y_hat_conditional,log(y.test))
 
 
 ##creating a table with training and testing performance
-fit.tbl<-data.frame(Level_3_Eco=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
+fit.tbl<-data.frame(Fit=c( "RMSE","RMSE^e","MAE^e" ,"R^2"), Train=c(rmse,rmse_back,mae_back,rsq), Test=c(rmse_test,rmse_back_test,mae_back_test,rsq_conditional))
 
 fit.tbl                 
 #grid.table(fit.tbl)
@@ -218,66 +228,51 @@ fit.tbl
 #Determining if predictions from data model fall within 95% credible interval from the process model on Shannon's suggestions. I'm having trouble remembering how to diagnose this, but I think we want the data model to fall within the credible interval most of the time
 
 #taking the 95% credible intervals for the coefficient estimates in the training data
-posterior_quantiles <- lapply(jags.out, apply, 1,function(x){quantile(x,probs=c(.025,.975))})
+posterior_quantiles <- lapply(jags.out2, apply, 1,function(x){quantile(x,probs=c(.025,.975),na.rm = T)})
 
 #determining what percent of the data model values (observed values) fall in the prediction interval for the training data
-credible_int_train<-data.frame()#setting up new dataframe
-for (i in 1:length(train$CHLORIDE_MGL)){
-  
-  y=posterior_means$y[i] #observed
-  cred_.025=posterior_quantiles$mu[1,i]#lower cred interval for ith prediction
-  cred_.975=posterior_quantiles$mu[2,i]#upper cred interval for ith prediction
-  if(y>=cred_.025 & y<=cred_.975){
-    inside=1
-  }else{inside=0} #if obvserved is inside cred interval, code inside as 1 otherwise 0
-  
-  credible_int_train<-rbind(credible_int_train, data.frame(y_pred=y,cred_.025=cred_.025, cred_.975=cred_.975, inside=inside )) #filling in dataframe
-}
-sum(credible_int_train$inside)/length(credible_int_train$inside)#proportion inside
+credible_int_train = data.frame(y_pred = posterior_means$y, cred_.025 = posterior_quantiles$mu[1,], 
+                               cred_.975 = posterior_quantiles$mu[2,], inside = NA)
+credible_int_train = credible_int_train %>% mutate(inside = ifelse(y_pred >= cred_.025 & y_pred <= cred_.975,1,0))
+sum(credible_int_train$inside)/length(credible_int_train$inside) #proportion inside
+
 
 #determining what percent of the data model values (observed values) fall in the prediction interval for the testing data
 
-#generatign predictions for each of the 5000 samples from the posterior of each model coefficient and calculating the predicted values for each iteration. rowMeans is taking the mean across each of the 3 chains (not sure why there's 3?)
-y_hat_cred_int<-matrix(NA, nrow = length(test$CHLORIDE_MGL), ncol=5000)
-for (i in 1:length(test$CHLORIDE_MGL)){
-  y_hat_cred_int[i,]<-rowMeans(jags.out$beta0[1,1:5000,]) +
-    rowMeans(jags.out$beta1[1,1:5000,])* urban.test[i]+
-    rowMeans(jags.out$beta2[1,1:5000,])*ag.test[i] +
-    rowMeans(jags.out$beta3[1,1:5000,])*forest.test[i] + 
-    rowMeans(jags.out$reg[1:84,1:5000,], dims=2)[region.test[i]]
-}
+#generating predictions for each of the 5000 samples from the posterior of each model coefficient and calculating the predicted values for each iteration. rowMeans is taking the mean across each of the 3 chains (not sure why there's 3?)
+# y_hat_cred_int <- matrix(NA, nrow = length(test$Chloride), ncol=5000)
+# for (i in 1:length(test$Chloride)){
+#   print(i)
+#   y_hat_cred_int[i,]<-rowMeans(jags.out2$beta0[1,1:5000,]) +
+#     rowMeans(jags.out2$beta1[1,1:5000,])* urban.test[i]+
+#     rowMeans(jags.out2$beta2[1,1:5000,])*ag.test[i] +
+#     rowMeans(jags.out2$beta3[1,1:5000,])*forest.test[i] + 
+#     rowMeans(jags.out2$reg[1:91,1:5000,], dims=2,na.rm = T)[region.test[i]]
+# }
+y_hat_cred_intFUN <- function(row) {
+  rowMeans(jags.out2$beta0[1,1:5000,]) +
+  rowMeans(jags.out2$beta1[1,1:5000,])* urban.test[row]+
+  rowMeans(jags.out2$beta2[1,1:5000,])*ag.test[row] +
+  rowMeans(jags.out2$beta3[1,1:5000,])*forest.test[row] + 
+  rowMeans(jags.out2$reg[1:91,1:5000,], dims=2,na.rm = T)[region.test[row]]
+}  
+y_hat_cred_intFUNout = sapply(X = seq(1:length(test$Chloride)), FUN = y_hat_cred_intFUN)
+y_hat_cred_int = t(y_hat_cred_intFUNout)
 
 #calculating the predicted credible interval for each observation in the testing set
 posterior_quantiles_test <- apply(y_hat_cred_int, 1,function(x){quantile(x,probs=c(.025,.975), na.rm=T)})
 
 #determining how many of the observed chloride values fall inside the credible interval for the predictions
-credible_int_test<-data.frame() #blank data
-for (i in 1:length(test$CHLORIDE_MGL)){
-  
-  y=log(test$CHLORIDE_MGL[i])#observed
-  if(is.na(posterior_quantiles_test[1,i])){ #skip over NA values and fill in NA
-    credible_int_test<-rbind(credible_int_test, data.frame(y_pred=y,cred_.025=NA, cred_.975=NA, inside=NA ))
-  }else{
-    
-    cred_.025=posterior_quantiles_test[1,i]#lower cred for observation
-    cred_.975=posterior_quantiles_test[2,i]#upper cred for observation
-    if(y>=cred_.025 & y<=cred_.975){
-      inside=1
-    }else{inside=0}#if obvserved is inside cred interval, code inside as 1 otherwise 0
-    
-    credible_int_test<-rbind(credible_int_test, data.frame(y_pred=y,cred_.025=cred_.025, cred_.975=cred_.975, inside=inside ))#filling in dataframe
-  }
-}
+credible_int_test = data.frame(y_pred = log(test$Chloride), cred_.025 = posterior_quantiles_test[1,], 
+                               cred_.975 = posterior_quantiles_test[2,], inside = NA)
 
+credible_int_test = credible_int_test %>% mutate(inside = ifelse(y_pred >= cred_.025 & y_pred <= cred_.975,1,0))
 sum(credible_int_test$inside, na.rm=T)/length(credible_int_test$inside[!is.na(credible_int_test$inside)]) # proportion that falls in is very low
-
 
 #plotting out predicted values and CIs
 #training
 credible_int_train$order <- order(credible_int_train$y_pred)
-
 cred_train_plot_df<-cbind(credible_int_train[credible_int_train$order,],seq=1:nrow(credible_int_train))
-
 ggplot(data=cred_train_plot_df) + geom_point(aes(y=y_pred, x=seq)) + geom_errorbar(aes(x=seq,ymin=cred_.025, ymax=cred_.975), color="red", size=.3)+ ggtitle("training predictions")+ scale_x_continuous("Observation #")
 
 
