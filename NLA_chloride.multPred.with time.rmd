@@ -1,0 +1,214 @@
+
+Space and NLA data. 
+author: "Shannon LaDeau"
+date: "October 2018"
+
+---
+
+```{r}
+rm(list = ls())  #remove anything stored in workspace from previous exercises
+
+#install.packages("tidyverse")
+#library(readxl)
+library(rjags)
+library(tidyverse)
+```
+
+
+Data used are from the US National Lakes Assessment: https://www.epa.gov/national-aquatic-resource-surveys/nla
+The focal response variable here is chloride
+
+```{r setup}
+dat = read_csv("data/GLEON NLA data combined 2007 and 2012_first_visit.csv")
+
+y = dat$CHLORIDE_MGL  #focal response variable
+
+#build a y with missing data
+y.na=y
+y.na[10]=NA
+y.na[20]=NA
+y.na[30]=NA
+y.na[40]=NA
+y.na[50]=NA
+
+region.= dat$WSA_ECO9  #ecological region indicator
+region=as.numeric(as.factor(region.))  ##change char to numeric
+
+depth = dat$DEPTH_M.mean - mean(dat$DEPTH_M.mean,na.rm=T) #centered predictor
+
+
+temp = dat$TEMP_C.mean - mean(dat$TEMP_C.mean,na.rm=T)#centered predictor
+
+
+urban = 0.01 * (dat$PCT_DEVELOPED_BSN- mean(dat$PCT_DEVELOPED_BSN,na.rm=T)) #centered predictor - as proportion
+
+ag = 0.01 * (dat$PCT_AGRIC_BSN- mean(dat$PCT_AGRIC_BSN,na.rm=T)) #centered predictor - as proportion
+
+lat=dat$LAT_DD - mean(dat$LAT_DD,na.rm=T)  #centered predictor
+
+resT = dat$Residence_Time - mean(dat$Residence_Time, na.rm=T)
+
+```
+If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
+
+Confirm convergence and define burn-in. ONCE you have a model you like you should do the steps below to make sure model is converged AND that you only use samples from posterior afer convergence.
+
+
+##ignore this code for now
+```{r}
+## determine the first iteration after convergence
+burnin <- GBR$last.iter[tail(which(GBR$shrink[,,2] > 1.1),1)+1]## check for no burn-in case
+if(length(burnin) == 0) burnin = 1
+## remove burn-in
+jags.burn <- window(jags.out,start=burnin)
+## check diagnostics post burn-in
+gelman.diag(jags.burn)
+plot(jags.burn)
+```
+
+Model with multiple predictor variables 
+
+```{r}
+NormMean.Cov.RE <- "
+model {
+  beta0 ~ dnorm(0,tau.beta0) # priors  
+  beta1~ dnorm(0,tau.beta1)
+  beta2~ dnorm(0,tau.beta2)
+
+  tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
+
+  for(i in 1:N){
+    mu[i] <- beta0 + beta1 * resT[i] + beta2 * urban[i] + reg[region[i]] # process model
+    y[i] ~ dnorm(mu[i],tau.obs) #data model
+    urban[i]~dnorm(0,50)  ##prior based on existing summary
+    resT[i]~dnorm(0,0.05)
+
+  }
+ for(r in 1:maxR){  
+    reg[r] ~ dnorm(0,tau_reg)
+
+ }
+tau_reg  ~ dgamma(0.01,0.01) ##prior precision,  random effect
+}
+"
+```
+
+Define the data
+
+```{r}
+
+data = list(N=length(y),y = log(y.na), region = region, maxR=length(unique(region)), resT=resT,urban=urban,
+            tau.beta0=1/0.01,tau.beta1=1/0.01, tau.beta2=1/0.01,
+          a_obs = 0.01, r_obs= 0.01 ) ## prior mean precision 
+
+nchain = 3  # num chains for MCMC
+
+##Set-up initial values - okay to use data to identify good starting points
+inits <- list()
+for(i in 1:nchain){
+  y.samp = sample(log(y),length(y),replace=TRUE)  #resamples orig data 
+  inits[[i]] <- list(tau.obs=1/var((y.samp)), beta0=mean(y.samp), tau_reg=1.2)
+}
+
+```
+
+Make the model fit a time series where data for chloride is a function of previous measures and is a matrix with i lakes (rows) and t sample dates (columns). Any missing/unobserved values are NA.
+
+```{r}
+NormMean.time <- "
+model {
+
+
+  for(i in 1:nlakes){ #row
+    for(t in 1:ndates){ #column
+
+    y[i,t] ~ dnorm(mu[i,t],tau.obs) #data model
+    urban[i]~dnorm(0,50)  ##priors for a single value per lake
+    resT[i]~dnorm(0,0.05)
+  }
+
+for(t in 2:ndates){
+    x[i,t] <- beta1 * resT[i] + beta2 * urban[i] + beta3*mu[i,t-1] +                        reg[region[i]] # process model
+   
+    mu[i,t]~dnorm(x[i,t],tau.proc) #allows for process error
+}
+
+ for(r in 1:maxR){  
+    reg[r] ~ dnorm(beta0,tau.reg) #region effect is centered on intercept
+
+ }
+
+  beta0 ~ dnorm(0,1E-6) # priors  
+  beta1~ dnorm(0,1E-6) #could use multivariate normal for all betas at once
+  beta2~ dnorm(0,1E-6)
+  beta3~ dnorm(0,1E-6)
+
+  tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data mode
+  tau.proc ~ dgamma(a_proc,r_proc) #prior precision, process model
+  tau.reg  ~ dgamma(a_reg,r_reg) ##prior precision,  random effect
+}
+"
+```
+
+##Run the model
+```{r}
+j.model   <- jags.model (file = textConnection(NormMean.Cov.RE),
+                             data = data,
+                             inits = inits,
+                             n.chains = 3)
+
+```
+
+```{r}
+jags.out   <- coda.samples (model = j.model,
+                              
+                            variable.names = c("beta0","beta1","beta2","tau.obs","tau_reg"),
+                                n.iter = 5000)
+
+plot(jags.out)
+
+out<-as.matrix(jags.out)
+summary(out)
+##ignore this code for now
+
+gelman.diag(jags.out)
+GBR <- gelman.plot(jags.out)
+
+
+#DIC is easy way to look at model fit (generally look for decrease by 10 or more)
+#dic.samples(j.model,1000)  ##Deviance Information Criterion
+
+```
+
+
+If you want to check out the estimates for the unknown predictor or response variables, it is easiest to run model again and just save those...
+
+```{r}
+
+jags.out2   <- coda.samples (model = j.model,
+                            variable.names = c("mu"),
+                                n.iter = 1000)
+
+out<-as.matrix(jags.out2)
+
+
+#hist(out[,2070])  ###look at histogram of first missing value - row 2070
+
+ na.mean = rep(0,length(resT))
+
+for (i in 1:length(resT)){na.mean[i] = mean(out[,i])}
+#hist(na.mean[2070])
+ hist(out[,10])
+ 
+ y.obs=c(log(y[10]),log(y[20]),log(y[30]),log(y[40]),log(y[50]))
+  y.pred=c(na.mean[10],na.mean[20],na.mean[30],na.mean[40],na.mean[50])
+
+  plot(y.obs,y.pred)
+ 
+ plot(log(y),na.mean)
+ cor.test(na.mean,log(y))
+#barplot(na.mean)
+
+
+```
+
