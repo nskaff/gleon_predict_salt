@@ -22,10 +22,18 @@ dat <- datin %>% filter(Chloride < 10000 & Chloride >=0) %>%
   mutate(region = parse_number(edu_zoneid))  %>%
   mutate(forag = (iws_nlcd2011_pct_ag+0.01)/(iws_nlcd2011_pct_forest+0.001)) %>%
   filter(Date > as.Date('2000-01-01')) %>%
-  group_by(lagoslakeid) %>% 
-  summarise_all(funs(first)) %>%
-  filter(!(coastdist < 4 & Chloride > 1000))
+  filter(!(coastdist < 4 | Chloride > 1000)) %>%
+  group_by(lagoslakeid) %>%
+  add_tally() #%>%
+# summarise_all(funs(first)) 
 
+datDup = dat %>% filter(n>5) %>%
+  filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
+  arrange(lagoslakeid,Date) %>%
+  summarise_if(is.numeric,funs(mean))
+datSin = dat %>% filter(n<=5) %>%
+  filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
+  summarise_if(is.numeric,funs(mean))
 
 # hist(log(dat$forag))
 # sum(is.infinite(dat$forag))
@@ -34,16 +42,16 @@ ggplot(dat, aes(x=lakeconnection, y=logChloride)) +
   geom_boxplot()
 
 ##splitting data into training and testing set, with 80% of data in the training set
-dat$id <- 1:nrow(dat)
-train <- dat %>% dplyr::sample_frac(.8)
-test  <- dplyr::anti_join(dat, train, by = 'id')
+datDup$id <- 1:nrow(datDup)
+train <- datDup %>% dplyr::sample_frac(.8)
+test  <- dplyr::anti_join(datDup, train, by = 'id')
 
-centerPred <- function(predictor, logadd = 0.01, bcval = 0.5){
+centerPred <- function(predictor, logadd = 0.01, method = 'log', center = T){
   
   # library(MASS)
   # a = boxcox(maxdepth+0.001 ~ 1, data = dat)
   # mean(a$x[a$y > max(a$y)-qchisq(0.95,1)/2])
-
+  
   # to find optimal lambda
   bc = BoxCox.lambda(predictor + logadd, method = 'loglik')
   # The optimal power transformation is found via the Box-Cox Test where
@@ -53,33 +61,41 @@ centerPred <- function(predictor, logadd = 0.01, bcval = 0.5){
   # .5 is a square root transform and
   # 1.0 is no transform.
   print(paste0('boxcox: ',bc))
-  if (bc < bcval) {
+  
+  if (method == 'log') {
     predictor = log(predictor + logadd)
   }
-  
-  cPred = predictor - mean(predictor,na.rm = T)
+  if (method == 'sqrt') {
+    predictor = sqrt(predictor)
+  }
+  if (center == TRUE){
+    cPred = predictor - mean(predictor,na.rm = T)
+  } else {
+    cPred = predictor
+  }
   hist(cPred)
   return(cPred)
 }
 
 y = train$Chloride  #focal response variable
 region = train$region  #ecological region indicator
-forag = log(train$forag)
 depth = centerPred(train$maxdepth) #centered predictor
-urban = centerPred(train$iws_nlcd2011_pct_impervious,logadd = 0.1)
-ltype = c(1:4)[as.factor(train$lakeconnection)]
-# ag = 0.01* centerPred(train$iws_nlcd2011_pct_ag,logadd = 0.01, bcval = 0)
-# forest = 0.01* centerPred(train$iws_nlcd2011_pct_forest,logadd = 0.01, bcval = 0)
-# lat = train$nhd_lat - mean(train$nhd_long,na.rm=T)  #centered predictor
+roads = centerPred(train$iws_roaddensity_density_mperha,method = 'sqrt')
+urban = centerPred(train$iws_nlcd2011_pct_impervious,logadd = 0.1, method = 'log')
+ag = centerPred(train$iws_nlcd2011_pct_ag,method = 'sqrt')
+forest = centerPred(train$iws_nlcd2011_pct_forest,method = 'sqrt', center = T)
+lat = train$nhd_lat - mean(train$nhd_long,na.rm=T)  #centered predictor
 
 
 ####setting up testing parameters
 y.test = test$Chloride  #focal response variable
-region.test= test$region  #ecological region indicator
-forag.test = log(test$forag)
+region.test = test$region  #ecological region indicator
 depth.test = centerPred(test$maxdepth) #centered predictor
-urban.test = centerPred(test$iws_nlcd2011_pct_impervious,logadd = 0.1)
-ltype.test = c(1:4)[as.factor(test$lakeconnection)]
+roads.test = centerPred(test$iws_roaddensity_density_mperha,method = 'sqrt')
+urban.test = centerPred(test$iws_nlcd2011_pct_impervious,logadd = 0.1, method = 'log')
+ag.test = centerPred(test$iws_nlcd2011_pct_ag,method = 'sqrt')
+forest.test = centerPred(test$iws_nlcd2011_pct_forest,method = 'sqrt', center = T)
+lat.test = test$nhd_lat - mean(test$nhd_long,na.rm=T)  #centered predictor
 
 # If you're comfortable running the code then YOU SHOULD be able to scroll down to the section titled "add Multiple Predictor Variables" and skip the sequential models that add RE and single variable.
 # Confirm convergence and define burn-in. ONCE you have a model you like you should do the steps below to make sure model is converged AND that you only use samples from posterior afer convergence.
@@ -97,7 +113,6 @@ GBR <- gelman.plot(jags.out)
 # ## check diagnostics post burn-in
 # gelman.diag(jags.burn)
 
-
 # Model with multiple predictor variables 
 NormMean.Cov.RE <- "
 model {
@@ -106,34 +121,31 @@ beta1~ dnorm(0,tau.beta1)
 beta2~ dnorm(0,tau.beta2)
 beta3~ dnorm(0,tau.beta3)
 
+
 tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
 
 for(i in 1:N){
-  mu[i] <- beta0 + beta1*depth[i]+ beta2*forag[i] + beta3*urban[i] +
-       reg[region[i]] + typ[ltype[i]] # process model 
-  y[i] ~ dnorm(mu[i],tau.obs) #data model
-  urban[i]~dnorm(0.1,5)  ##prior based on existing summary
-  forag[i]~dnorm(0,5)
-  depth[i]~dnorm(0,5)
+mu[i] <- beta0 + beta1*urban[i]+ beta2*forest[i] + beta3*roads[i] +
+reg[region[i]] # process model 
+y[i] ~ dnorm(mu[i],tau.obs) #data model
+urban[i] ~ dnorm(0.1,5)  ##prior based on existing summary
+forest[i] ~ dnorm(0,5)
+
+roads[i] ~ dnorm(0,5)
 }
 for(r in maxR) {  
-  reg[r] ~ dnorm(0,tau_reg)
+reg[r] ~ dnorm(0,tau_reg)
 }
-tau_reg  ~ dgamma(0.01,0.01) ##prior precision,  random effect
+tau_reg  ~ dgamma(0.01,0.01) ##prior precision, random effect
 
-for(l in laketypes) {  
-  typ[l] ~ dnorm(0,tau_typ)
-}
-tau_typ  ~ dgamma(0.01,0.01) ##prior precision,  random effect
 }
 "
 
 # Define the data
-data = list(N=length(y),y = log(y), region = region, ltype = ltype,
+data = list(N=length(y),y = log(y), region = region, 
             maxR=sort(unique(dat$region)), 
-            laketypes = sort(unique(ltype)),
-            depth=depth, forag=forag, urban=urban,
-            tau.beta0=1/0.01, tau.beta1=1/0.01, tau.beta2=1/0.01, tau.beta3=1/0.01,
+            urban=urban, forest = forest, roads = roads,
+            tau.beta0=1/0.01, tau.beta1=1/0.01, tau.beta2=1/0.01, tau.beta3=1/0.01, 
             a_obs = 0.01, r_obs= 0.01 ) ## prior mean precision 
 
 nchain = 3  # num chains for MCMC
@@ -142,18 +154,18 @@ nchain = 3  # num chains for MCMC
 inits <- list()
 for(i in 1:nchain) {
   y.samp = sample(log(y),length(y),replace=TRUE)  #resamples orig data 
-  inits[[i]] <- list(tau.obs=1/var((y.samp)), beta0=mean(y.samp), tau_reg=1.2, tau_typ = 1)
+  inits[[i]] <- list(tau.obs=1/var((y.samp)), beta0=mean(y.samp), tau_reg=1.2)
 }
 
 #### #### Run the model #### #### 
 j.model <- jags.model(file = textConnection(NormMean.Cov.RE),
-data = data,
-inits = inits,
-n.chains = 3)
+                      data = data,
+                      inits = inits,
+                      n.chains = 3)
 
 jags.out <- coda.samples(model = j.model,
-  variable.names = c("beta0","beta1", "beta2", "beta3","tau.obs","tau_reg","tau_typ"), 
-  n.iter = 5000)
+                         variable.names = c("beta0","beta1", "beta2", "beta3","tau.obs","tau_reg"), 
+                         n.iter = 5000)
 
 plot(jags.out)
 out<-as.matrix(jags.out)
@@ -164,7 +176,7 @@ dic.samples(j.model,1000)  ##Deviance Information Criterion
 
 # Getting predicted values and calculating training and testing R2 and rmse. This should be double checked..not totally sure of myself here
 # plot prediction interval from mu and see if prediction y_pred is outside the prediction interval -- pull out the quantiles for the mu and look to see.
-jags.out2 <- jags.samples(model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3", "reg", "typ","mu", "y"),  n.iter = 5000)
+jags.out2 <- jags.samples(model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3","reg","mu", "y"),  n.iter = 5000)
 beep(sound = 2)
 
 summary(matrix(c(jags.out2[[1]],jags.out2[[2]],jags.out2[[3]],jags.out2[[4]])
@@ -204,20 +216,17 @@ mae_back <- MAE_back(posterior_means$mu,posterior_means$y)
 
 #organizing the posterior parameter means
 B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
-
+ 
 #organizing the random intercepts for each region
 R.intercept<- as.matrix(unlist(posterior_means[c("reg")]))
-#organizing the random intercepts for each region
-R.intercept2<- as.matrix(unlist(posterior_means[c("typ")]))
 
 ###predicting from test set
-y_hat_conditional<- B[1,] + B[2,]*depth.test+ B[3,]*forag.test + B[4,]*urban.test + 
-          R.intercept[region.test] + R.intercept2[ltype.test]
-
+y_hat_conditional<- B["beta0",] + B["beta1",]*urban.test+ B["beta2",]*forest.test + B["beta3",]*roads.test +
+  R.intercept[region.test] 
 #generating a credible interval on predicted values
 #calculating predictive R
-rss_cond <- sum((y_hat_conditional - log(y.test)) ^ 2, na.rm=T)  ## residual sum of squares
-tss_cond <- sum((log(y.test) - mean(log(y.test), na.rm=T)) ^ 2, na.rm=T)  ## total sum of squares
+rss_cond <- sum((log(y.test) - y_hat_conditional) ^ 2, na.rm=T)  ## residual sum of squares
+tss_cond <- sum((log(y.test) - log(mean(y.test,na.rm = T))) ^ 2, na.rm=T)  ## total sum of squares
 rsq_conditional <- 1 - rss_cond/tss_cond
 
 ###calculating testing rmse###
@@ -236,7 +245,6 @@ fit.tbl
 #another way of calculating predictive R2, essentially the same result
 #cor(y_hat_conditional,log(y.test), use="pairwise.complete.obs")^2
 
-
 ############# 95% credible interval ##############################################
 #Determining if predictions from data model fall within 95% credible interval from the process model on Shannon's suggestions. I'm having trouble remembering how to diagnose this, but I think we want the data model to fall within the credible interval most of the time
 #taking the 95% credible intervals for the coefficient estimates in the training data
@@ -244,7 +252,7 @@ posterior_quantiles <- lapply(jags.out2, apply, 1,function(x){quantile(x,probs=c
 
 #determining what percent of the data model values (observed values) fall in the prediction interval for the training data
 credible_int_train = data.frame(y_pred = posterior_means$y, cred_.025 = posterior_quantiles$mu[1,], 
-                               cred_.975 = posterior_quantiles$mu[2,], inside = NA)
+                                cred_.975 = posterior_quantiles$mu[2,], inside = NA)
 credible_int_train = credible_int_train %>% mutate(inside = ifelse(y_pred >= cred_.025 & y_pred <= cred_.975,1,0))
 sum(credible_int_train$inside)/length(credible_int_train$inside) #proportion inside
 
@@ -254,11 +262,10 @@ sum(credible_int_train$inside)/length(credible_int_train$inside) #proportion ins
 #generating predictions for each of the 5000 samples from the posterior of each model coefficient and calculating the predicted values for each iteration. rowMeans is taking the mean across each of the 3 chains (not sure why there's 3?)
 y_hat_cred_intFUN <- function(row) {
   rowMeans(jags.out2$beta0[1,1:5000,]) +
-  rowMeans(jags.out2$beta1[1,1:5000,])* depth.test[row]+
-  rowMeans(jags.out2$beta2[1,1:5000,])*forag.test[row] +
-  rowMeans(jags.out2$beta3[1,1:5000,])*urban.test[row] + 
-  rowMeans(jags.out2$reg[1:91,1:5000,], dims=2,na.rm = T)[region.test[row]] +
-  rowMeans(jags.out2$typ[1:4,1:5000,], dims=2,na.rm = T)[ltype.test[row]]
+    rowMeans(jags.out2$beta1[1,1:5000,])* urban.test[row]+
+    rowMeans(jags.out2$beta2[1,1:5000,])* forest.test[row] +
+    rowMeans(jags.out2$beta3[1,1:5000,])* roads.test[row] + 
+    rowMeans(jags.out2$reg[1:91,1:5000,], dims=2,na.rm = T)[region.test[row],] 
 }  
 y_hat_cred_intFUNout = sapply(X = seq(1:length(test$Chloride)), FUN = y_hat_cred_intFUN)
 y_hat_cred_int = t(y_hat_cred_intFUNout)
@@ -279,11 +286,20 @@ credible_int_train$order <- order(credible_int_train$y_pred)
 cred_train_plot_df<-cbind(credible_int_train[credible_int_train$order,],seq=1:nrow(credible_int_train))
 ggplot(data=cred_train_plot_df) + geom_point(aes(y=y_pred, x=seq)) + geom_errorbar(aes(x=seq,ymin=cred_.025, ymax=cred_.975), color="red", size=.3)+ ggtitle("training predictions")+ scale_x_continuous("Observation #")
 
-
 #testing
 credible_int_test$order <- order(credible_int_test$y_pred)
 cred_test_plot_df<-cbind(credible_int_test[credible_int_test$order,],seq=1:nrow(credible_int_test))
 ggplot(data=cred_test_plot_df) + geom_point(aes(y=y_pred, x=seq)) + geom_errorbar(aes(x=seq,ymin=cred_.025, ymax=cred_.975), color="red", size=.3) + ggtitle("testing predictions") + scale_x_continuous("Observation #")
 
 
+
+## Print again ##
+fit.tbl
+summary(out)
+
+
+credible_int_train$lat = train$nhd_lat
+credible_int_train$long = train$nhd_long
+credible_int_train$lagos = train$lagoslakeid
+credible_int_train$diff = credible_int_train$y_pred - credible_int_train$cred_.975
 
