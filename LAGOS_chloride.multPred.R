@@ -10,7 +10,7 @@ library(readr)
 library(gridExtra)
 library(dplyr)
 library(forecast) # for box-cox test
-library(beepr)
+library(sf)
 
 # Data used are from LAGOS and the WQP
 datin = read_csv("data/LAGOS_ChlorideCovariates_wCoast.csv") 
@@ -20,18 +20,17 @@ dat <- datin %>% filter(Chloride < 10000 & Chloride >=0) %>%
   mutate(Chloride = ifelse(Chloride == 0, 0.0001, Chloride)) %>%
   mutate(edu_zoneid = ifelse(edu_zoneid == 'OUT_OF_EDU',1,edu_zoneid)) %>% #change regions to numbers
   mutate(region = parse_number(edu_zoneid))  %>%
-  mutate(forag = (iws_nlcd2011_pct_ag+0.01)/(iws_nlcd2011_pct_forest+0.001)) %>%
   filter(Date > as.Date('2000-01-01')) %>%
   filter(!(coastdist < 4 | Chloride > 1000)) %>%
   group_by(lagoslakeid) %>%
   add_tally() #%>%
 # summarise_all(funs(first)) 
 
-datDup = dat %>% filter(n>5) %>%
+datDup = dat %>% filter(n>2) %>%
   filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
   arrange(lagoslakeid,Date) %>%
-  summarise_if(is.numeric,funs(mean))
-datSin = dat %>% filter(n<=5) %>%
+  summarise_if(is.numeric,funs(mean)) 
+datSin = dat %>% filter(n<=2) %>%
   filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
   summarise_if(is.numeric,funs(mean))
 
@@ -44,7 +43,8 @@ ggplot(dat, aes(x=lakeconnection, y=logChloride)) +
 ##splitting data into training and testing set, with 80% of data in the training set
 datDup$id <- 1:nrow(datDup)
 train <- datDup %>% dplyr::sample_frac(.8)
-test  <- dplyr::anti_join(datDup, train, by = 'id')
+test  <- dplyr::anti_join(datDup, train, by = 'id') %>%
+  bind_rows(datSin)
 
 centerPred <- function(predictor, logadd = 0.01, method = 'log', center = T){
   
@@ -265,8 +265,12 @@ y_hat_cred_intFUN <- function(row) {
     rowMeans(jags.out2$beta1[1,1:5000,])* urban.test[row]+
     rowMeans(jags.out2$beta2[1,1:5000,])* forest.test[row] +
     rowMeans(jags.out2$beta3[1,1:5000,])* roads.test[row] + 
-    rowMeans(jags.out2$reg[1:91,1:5000,], dims=2,na.rm = T)[region.test[row],] 
+    rowMeans(jags.out2$reg[,1:5000,], dims=2,na.rm = T)[region.test[row],] 
 }  
+
+a = data.frame(a = apply(X = rowMeans(jags.out2$reg[,1:5000,], dims=2,na.rm = T),MARGIN = 1,FUN = min), 
+           b = apply(X = rowMeans(jags.out2$reg[,1:5000,], dims=2,na.rm = T),MARGIN = 1,FUN = max)) 
+a$c = abs(a$a-a$b)
 y_hat_cred_intFUNout = sapply(X = seq(1:length(test$Chloride)), FUN = y_hat_cred_intFUN)
 y_hat_cred_int = t(y_hat_cred_intFUNout)
 
@@ -297,9 +301,21 @@ ggplot(data=cred_test_plot_df) + geom_point(aes(y=y_pred, x=seq)) + geom_errorba
 fit.tbl
 summary(out)
 
-
 credible_int_train$lat = train$nhd_lat
 credible_int_train$long = train$nhd_long
 credible_int_train$lagos = train$lagoslakeid
 credible_int_train$diff = credible_int_train$y_pred - credible_int_train$cred_.975
 
+a$ID = 1:91
+a$EDU = paste0('EDU_',a$ID)
+
+library(sf)
+regions = st_read('~/Downloads/EDU/CondensedEDU.shp',stringsAsFactors = F) %>%
+  select(ZoneID, region = Country) %>%
+  mutate(region = as.numeric(region)) %>%
+  left_join(a,by = c('ZoneID' = 'EDU'))
+st_write(regions,'~/Downloads/EDU/CondensedEDU2.shp',delete_dsn = T)
+
+table(datDup$region)
+
+# plot(regions["c"])
