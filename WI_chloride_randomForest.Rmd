@@ -1,0 +1,175 @@
+---
+title: "WI_chloride_randomforest"
+author: "Hilary Dugan"
+date: "3/4/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(forestFloor)
+library(randomForest)
+library(tidyverse)
+library(scales)
+library(sf)
+library(LAGOSNE)
+library(caret)
+# Load data
+datin = read_csv("data/LAGOS_ChlorideCovariates_wCoast_Interstate.csv")
+# nhd1 = st_read('~/Dropbox/currentprojects/SaltBayes/LAGOS_GIS/LAGOS_NE_All_Lakes_1ha/',stringsAsFactors = F)
+# mnin = read_csv('~/Dropbox/currentprojects/SaltBayes/MN_results_MPCA/Chloride_Lakes_02202019.csv')
+
+```
+
+## Tidy data
+
+```{r loaddata}
+dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
+  dplyr::mutate(Chloride = ifelse(Chloride == 0, 0.0001, Chloride)) %>%
+  dplyr::filter(!(coastdist < 4 | Chloride > 1000)) %>%
+  dplyr::filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
+  dplyr::filter(Date > as.Date('1990-01-01')) %>%
+  dplyr::mutate(rdDist_WIMN = pmin(rdDist_WI,rdDist_MN)) %>% 
+  dplyr::group_by(lagoslakeid) %>%
+  dplyr::summarise_if(is.numeric,funs(mean)) %>% 
+  dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid))) 
+
+#adding connectivity dummies
+oneHot=function(x) {
+  conn = factor(x)
+  apply(data.frame(model.matrix(~conn+0)),2,FUN=factor)
+}
+
+dat_conn_dummy<-oneHot(dat$lakeconnection)
+
+dat<-cbind(dat,dat_conn_dummy)
+
+dat_rf <- data.frame(dat[,c("Chloride","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","iws_ha","lakeconnection","gnis_name","nhd_lat","nhd_long","lagoslakeid","rdDist_Interstate","rdDist_WIMN","connDR_LakeStream" ,"connDR_Stream" , "connHeadwater" , "connIsolated"  )]) %>%
+  filter_all(all_vars(!is.na(.))) %>%
+  mutate(Chloride = log(Chloride), 
+         iws_ha = log(iws_ha),
+         iws_nlcd2011_pct_forest = sqrt(iws_nlcd2011_pct_forest),
+         iws_roaddensity_density_mperha = log(iws_roaddensity_density_mperha+0.1),
+         iws_nlcd2011_pct_ag = sqrt(iws_nlcd2011_pct_ag),
+         iws_nlcd2011_pct_impervious = log(iws_nlcd2011_pct_impervious+0.01),
+         rdDist_Interstate = log(rdDist_Interstate),
+         rdDist_WIMN = log(rdDist_WIMN))
+
+```
+
+## Random Forest model 
+```{r rfmodel}
+
+rf_cov<-dat_rf[,c("iws_nlcd2011_pct_forest","iws_nlcd2011_pct_impervious","rdDist_WIMN","rdDist_Interstate","nhd_lat","nhd_long","connDR_LakeStream" ,"connDR_Stream" , "connHeadwater" , "connIsolated" )]
+
+##grid search to select random forest hyperparameters
+control <- trainControl(method="oob", number=10, search="random")
+rf_random <- train(y=dat_rf$Chloride, x = rf_cov, method="rf",tuneLength=15, trControl=control)
+#best r2 model has mtry=4, but I like maximizing mtry to better interpret interactions in forestFloor plots/control for variables that are used for splits earlier in the trees
+#small grid search for the right sampsize. Lower sampsize decorrelates trees a bit, which is important when you maximize mtry but less so if mtry is 4
+sampsize<-c(100,200,500,1000,length(dat_rf$Chloride))
+samp_df<-data.frame()
+
+for(i in 1:length(sampsize) ){
+rf_sampsize<-randomForest(y=dat_rf$Chloride, 
+                       x = rf_cov, 
+                       keep.inbag = T, 
+                       importance = T, 
+                       ntree=500,
+                       sampsize = sampsize[i],
+                      # mtry=4,
+                       mtry=length(rf_cov) )
+samp_df<-rbind(samp_df,
+               data.frame(sampsize=sampsize[i],
+                          r2=rf_sampsize$rsq[length(rf_sampsize$rsq)],
+                          mse=rf_sampsize$mse[length(rf_sampsize$mse)])
+               )
+}
+samp_df
+#sampsize around the max is pretty good, though it's not the worst idea to reduce this value to decorrelate each tree
+
+rf_model<-randomForest(y=dat_rf$Chloride, 
+                       x = rf_cov, 
+                       keep.inbag = T, 
+                       importance = T, 
+                       ntree=500,
+                       sampsize = 1739,
+                      # mtry=4,
+                       mtry=length(rf_cov) )
+
+rf_model   
+varImpPlot(rf_model)
+
+#you'll notice that your interpretation of the forestfloor plot will change as you adjust mtry and sampsize. You can prioritize different things with these values
+
+#determining # of trees to stabilize error 
+  plot(rf_model$mse~c(1:500))
+  plot(rf_model$rsq~c(1:500))
+#pretty good by 100 trees
+
+
+ff_model<-forestFloor(rf_model,X = rf_cov,y= rf_model$y )
+Col = fcol(ff_model, 1, orderByImportance=T)
+plot(ff_model, col=Col, orderByImportance=T)
+
+dat_rf = dat_rf %>% mutate(predicted = rf_model$predicted)
+library(lme4)
+fits <- lmList(predicted ~ Chloride | lakeconnection, data=dat_rf)
+fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits)$r.squared,2)), lakeconnection = unique(fits@groups), 
+                   Chloride = rep(7,4),
+                   predicted = rep(0.1,4))
+
+p = ggplot(dat_rf, aes(x = exp(Chloride), y = exp(predicted), color = lakeconnection)) + geom_point() + geom_abline() +
+  #scale_colour_viridis_d() + 
+  facet_wrap(~lakeconnection) +
+  ylab('Predicted Chloride (mg/L)') + xlab('Observed Chloride (mg/L)') +
+  labs(title = paste0('Modeled chloride in Wisconsin Lakes (n =',nrow(dat_rf),')')) +
+  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  geom_text(data = fits1, aes(label = r2),hjust = 1,vjust = -1, color = 'black')
+p
+
+
+#plotting residuals over space
+library(tigris)
+states <- states(cb = TRUE)
+states_sf<- st_as_sf(states)
+dat_rf$residuals<-dat_rf$predicted-dat_rf$Chloride
+
+r_map<-ggplot(data=dat_rf) + 
+  geom_sf(data=states_sf[states_sf$NAME %in% c("Wisconsin", "Minnesota"),], fill="white")+
+  geom_point(aes(x=nhd_long, y=nhd_lat, col=abs(residuals)), size=2, alpha=.5 )+
+  scale_color_viridis_c(option="magma")+
+  theme_bw()
+
+
+```
+## Prediction for LAGOS 
+```{r LAGOSpred}
+datPred2 = read_csv('data/LAGOS_allLakes.csv') %>%
+  filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
+  select(lagoslakeid:gnis_name,"iws_ha","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","lakeconnection","rdDist_Interstate", "rdDist_WI","rdDist_MN") %>%
+  filter(!is.na(iws_nlcd2011_pct_forest)) %>%
+  dplyr::mutate(rdDist_WIMN = pmin(rdDist_WI,rdDist_MN)) %>% 
+  mutate(iws_ha = log(iws_ha),
+         iws_nlcd2011_pct_forest = log(iws_nlcd2011_pct_forest+0.1),
+         iws_roaddensity_density_mperha = log(iws_roaddensity_density_mperha+0.1),
+         iws_nlcd2011_pct_ag = log(iws_nlcd2011_pct_ag+0.1),
+         iws_nlcd2011_pct_impervious = log(iws_nlcd2011_pct_impervious+0.1),
+         rdDist_Interstate = log(rdDist_Interstate),
+         rdDist_WIMN = log(rdDist_WIMN))
+
+preds <- predict(rf_model, newdata = datPred2)
+datPred2$clPred = preds
+
+# Plot prediction histogram 
+ggplot() + 
+  geom_density(data = datPred2, aes(x = exp(clPred), fill = "r"), alpha = 0.3) +
+  geom_density(data = dat_rf, aes(x = exp(Chloride), fill = "b"), alpha = 0.3) +
+  scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
+  scale_fill_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
+  scale_x_continuous(trans='log10') +
+  labs(x = "Chloride (mg/L)", y = "n") +
+  ggtitle("Predicted Chloride Concentrations in Lagos") +
+  theme_minimal()
+```
+
