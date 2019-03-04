@@ -142,6 +142,15 @@ r_map<-ggplot(data=dat_rf) +
   theme_bw()
 
 
+#plotting the location of the weird points in the nhd_lat forest floor plot
+ggplot()+
+  geom_sf(data=states_sf[states_sf$NAME %in% c("Wisconsin", "Minnesota"),], fill="white")+
+  geom_point(data=dat_rf[ff_model$FCmatrix[,"nhd_lat"]< (-.5),],aes(x=nhd_long, y=nhd_lat), size=2, alpha=.5 )+
+  theme_bw()
+
+
+
+
 ```
 ## Prediction for LAGOS 
 ```{r LAGOSpred}
