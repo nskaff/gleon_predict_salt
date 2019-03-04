@@ -2,7 +2,7 @@
 # WQP and Lagos data
 # author: "Shannon LaDeau"
 # date: "October 2018"
-# Update: "Hilary Dugan - Dec 21 2018"
+# Update: "Hilary Dugan - Jan 17 2019"
 
 library(rjags)
 library(tidyverse)
@@ -20,6 +20,7 @@ dat <- datin %>% filter(Chloride < 10000 & Chloride >=0) %>%
   mutate(Chloride = ifelse(Chloride == 0, 0.0001, Chloride)) %>%
   mutate(edu_zoneid = ifelse(edu_zoneid == 'OUT_OF_EDU',1,edu_zoneid)) %>% #change regions to numbers
   mutate(region = parse_number(edu_zoneid))  %>%
+  mutate(state = parse_number(edu_zoneid))  %>%
   filter(Date > as.Date('2000-01-01')) %>%
   filter(!(coastdist < 4 | Chloride > 1000)) %>%
   group_by(lagoslakeid) %>%
@@ -29,10 +30,12 @@ dat <- datin %>% filter(Chloride < 10000 & Chloride >=0) %>%
 datDup = dat %>% filter(n>2) %>%
   filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
   arrange(lagoslakeid,Date) %>%
-  summarise_if(is.numeric,funs(mean)) 
-datSin = dat %>% filter(n<=2) %>%
-  filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
-  summarise_if(is.numeric,funs(mean))
+  group_by(lagoslakeid) %>%
+  summarise_if(is.numeric,funs(mean)) %>% 
+  left_join(distinct(select(dat,lagoslakeid,lakeconnection)))
+# datSin = dat %>% filter(n<=2) %>%
+#   filter(!is.na(buffer500m_roaddensity_density_mperha)) %>%
+#   summarise_if(is.numeric,funs(mean))
 
 # hist(log(dat$forag))
 # sum(is.infinite(dat$forag))
@@ -43,11 +46,9 @@ ggplot(dat, aes(x=lakeconnection, y=logChloride)) +
 ##splitting data into training and testing set, with 80% of data in the training set
 datDup$id <- 1:nrow(datDup)
 train <- datDup %>% dplyr::sample_frac(.8)
-test  <- dplyr::anti_join(datDup, train, by = 'id') %>%
-  bind_rows(datSin)
+test  <- dplyr::anti_join(datDup, train, by = 'id') 
 
 centerPred <- function(predictor, logadd = 0.01, method = 'log', center = T){
-  
   # library(MASS)
   # a = boxcox(maxdepth+0.001 ~ 1, data = dat)
   # mean(a$x[a$y > max(a$y)-qchisq(0.95,1)/2])
@@ -121,23 +122,22 @@ beta1~ dnorm(0,tau.beta1)
 beta2~ dnorm(0,tau.beta2)
 beta3~ dnorm(0,tau.beta3)
 
-
 tau.obs ~ dgamma(a_obs,r_obs) #prior precision, data model
 
 for(i in 1:N){
-mu[i] <- beta0 + beta1*urban[i]+ beta2*forest[i] + beta3*roads[i] +
-reg[region[i]] # process model 
-y[i] ~ dnorm(mu[i],tau.obs) #data model
-urban[i] ~ dnorm(0.1,5)  ##prior based on existing summary
-forest[i] ~ dnorm(0,5)
-
-roads[i] ~ dnorm(0,5)
+  mu[i] <- beta0 + beta1*urban[i]+ beta2*forest[i] + beta3*roads[i] +
+  reg[region[i]] # process model 
+  y[i] ~ dnorm(mu[i],tau.obs) #data model
+  urban[i] ~ dnorm(0.1,5)  ##prior based on existing summary
+  forest[i] ~ dnorm(0,5)
+  roads[i] ~ dnorm(0,5)
 }
 for(r in maxR) {  
-reg[r] ~ dnorm(0,tau_reg)
+  reg[r] ~ dnorm(0,tau_reg)
+
+
 }
 tau_reg  ~ dgamma(0.01,0.01) ##prior precision, random effect
-
 }
 "
 
@@ -177,10 +177,9 @@ dic.samples(j.model,1000)  ##Deviance Information Criterion
 # Getting predicted values and calculating training and testing R2 and rmse. This should be double checked..not totally sure of myself here
 # plot prediction interval from mu and see if prediction y_pred is outside the prediction interval -- pull out the quantiles for the mu and look to see.
 jags.out2 <- jags.samples(model = j.model,variable.names = c("beta0","beta1", "beta2", "beta3","reg","mu", "y"),  n.iter = 5000)
-beep(sound = 2)
 
-summary(matrix(c(jags.out2[[1]],jags.out2[[2]],jags.out2[[3]],jags.out2[[4]])
-               ,ncol=4))
+# summary(matrix(c(jags.out2[[1]],jags.out2[[2]],jags.out2[[3]],jags.out2[[4]])
+#                ,ncol=4))
 
 #taking the mean of the posterior for each parameter estimated
 posterior_means <- lapply(jags.out2, apply, 1, "mean")
@@ -219,6 +218,7 @@ B <- as.matrix(unlist(posterior_means[c("beta0","beta1", "beta2", "beta3")]))
  
 #organizing the random intercepts for each region
 R.intercept<- as.matrix(unlist(posterior_means[c("reg")]))
+
 
 ###predicting from test set
 y_hat_conditional<- B["beta0",] + B["beta1",]*urban.test+ B["beta2",]*forest.test + B["beta3",]*roads.test +
@@ -300,22 +300,24 @@ ggplot(data=cred_test_plot_df) + geom_point(aes(y=y_pred, x=seq)) + geom_errorba
 ## Print again ##
 fit.tbl
 summary(out)
+save(jags.out2, file="~/Dropbox/currentprojects/SaltBayes/jags.out2.RData")
 
 credible_int_train$lat = train$nhd_lat
 credible_int_train$long = train$nhd_long
 credible_int_train$lagos = train$lagoslakeid
 credible_int_train$diff = credible_int_train$y_pred - credible_int_train$cred_.975
+credible_int_train$lake = train$lakeconnection
+ggplot(credible_int_train, aes(x=lake, y=diff)) + 
+  geom_boxplot()
 
 a$ID = 1:91
 a$EDU = paste0('EDU_',a$ID)
 
-library(sf)
-regions = st_read('~/Downloads/EDU/CondensedEDU.shp',stringsAsFactors = F) %>%
-  select(ZoneID, region = Country) %>%
-  mutate(region = as.numeric(region)) %>%
-  left_join(a,by = c('ZoneID' = 'EDU'))
-st_write(regions,'~/Downloads/EDU/CondensedEDU2.shp',delete_dsn = T)
+# library(sf)
+# regions = st_read('~/Downloads/EDU/CondensedEDU.shp',stringsAsFactors = F) %>%
+#   select(ZoneID, region = Country) %>%
+#   mutate(region = as.numeric(region)) %>%
+#   left_join(a,by = c('ZoneID' = 'EDU'))
+# st_write(regions,'~/Downloads/EDU/CondensedEDU2.shp',delete_dsn = T)
 
-table(datDup$region)
 
-# plot(regions["c"])
