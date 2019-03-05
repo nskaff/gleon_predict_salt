@@ -137,7 +137,7 @@ dat_rf$residuals<-dat_rf$predicted-dat_rf$Chloride
 
 r_map<-ggplot(data=dat_rf) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c("Wisconsin", "Minnesota"),], fill="white")+
-  geom_point(aes(x=nhd_long, y=nhd_lat, col=abs(residuals)), size=2, alpha=.5 )+
+  geom_point(aes(x=nhd_long, y=nhd_lat, col=abs(residuals), size = abs(residuals)), alpha=.5 )+
   scale_color_viridis_c(option="magma")+
   theme_bw()
 
@@ -156,7 +156,7 @@ ggplot()+
 ```{r LAGOSpred}
 datPred2 = read_csv('data/LAGOS_allLakes.csv') %>%
   filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
-  select(lagoslakeid:gnis_name,"iws_ha","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","lakeconnection","rdDist_Interstate", "rdDist_WI","rdDist_MN") %>%
+  select(lagoslakeid:nhdid,"iws_ha","nhd_lat","nhd_long","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","lakeconnection","rdDist_Interstate", "rdDist_WI","rdDist_MN") %>%
   filter(!is.na(iws_nlcd2011_pct_forest)) %>%
   dplyr::mutate(rdDist_WIMN = pmin(rdDist_WI,rdDist_MN)) %>% 
   mutate(iws_ha = log(iws_ha),
@@ -166,6 +166,11 @@ datPred2 = read_csv('data/LAGOS_allLakes.csv') %>%
          iws_nlcd2011_pct_impervious = log(iws_nlcd2011_pct_impervious+0.1),
          rdDist_Interstate = log(rdDist_Interstate),
          rdDist_WIMN = log(rdDist_WIMN))
+
+dat_conn_dummy<-oneHot(datPred2$lakeconnection)
+datPred2<-cbind(datPred2,dat_conn_dummy)
+datPred2<- datPred2[,c("iws_nlcd2011_pct_forest","iws_nlcd2011_pct_impervious","rdDist_WIMN","rdDist_Interstate","nhd_lat","nhd_long","connDR_LakeStream","connDR_Stream", "connHeadwater", "connIsolated" )]
+
 
 preds <- predict(rf_model, newdata = datPred2)
 datPred2$clPred = preds
