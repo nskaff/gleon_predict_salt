@@ -1,6 +1,6 @@
 ---
 title: "WI_chloride_randomforest"
-author: "Hilary Dugan"
+author: "Hilary Dugan and Nick Skaff"
 date: "3/4/2019"
 output: pdf_document
 ---
@@ -30,6 +30,8 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
   dplyr::filter(Date > as.Date('1990-01-01')) %>%
   dplyr::mutate(rdDist_WIMN = pmin(rdDist_WI,rdDist_MN)) %>% 
+  dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
+  dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
   dplyr::group_by(lagoslakeid) %>%
   dplyr::summarise_if(is.numeric,funs(mean)) %>% 
   dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid))) 
@@ -44,23 +46,26 @@ dat_conn_dummy<-oneHot(dat$lakeconnection)
 
 dat<-cbind(dat,dat_conn_dummy)
 
-dat_rf <- data.frame(dat[,c("Chloride","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","iws_ha","lakeconnection","gnis_name","nhd_lat","nhd_long","lagoslakeid","rdDist_Interstate","rdDist_WIMN","connDR_LakeStream" ,"connDR_Stream" , "connHeadwater" , "connIsolated"  )]) %>%
-  filter_all(all_vars(!is.na(.))) %>%
-  mutate(Chloride = log(Chloride), 
-         iws_ha = log(iws_ha),
-         iws_nlcd2011_pct_forest = sqrt(iws_nlcd2011_pct_forest),
-         iws_roaddensity_density_mperha = log(iws_roaddensity_density_mperha+0.1),
-         iws_nlcd2011_pct_ag = sqrt(iws_nlcd2011_pct_ag),
-         iws_nlcd2011_pct_impervious = log(iws_nlcd2011_pct_impervious+0.01),
-         rdDist_Interstate = log(rdDist_Interstate),
-         rdDist_WIMN = log(rdDist_WIMN))
+log01 <- function(x){log(x + 0.001)} # log of columns 
+dat_rf <- dat %>%
+  mutate_at(vars(Chloride,iws_ha:rdDist_WIMN,iws_forest,iws_develop),log01) %>%
+  filter(!is.na(iws_nlcd2011_pct_22))
+
 
 ```
 
 ## Random Forest model 
 ```{r rfmodel}
 
-rf_cov<-dat_rf[,c("iws_nlcd2011_pct_forest","iws_nlcd2011_pct_impervious","rdDist_WIMN","rdDist_Interstate","nhd_lat","nhd_long","connDR_LakeStream" ,"connDR_Stream" , "connHeadwater" , "connIsolated" )]
+rf_cov <- dat_rf %>% dplyr::select(nhd_lat, nhd_long,
+                                   iws_forest,
+                                   iws_nlcd2011_pct_81,
+                                   iws_nlcd2011_pct_82,
+                                   iws_nlcd2011_pct_21,
+                                   iws_nlcd2011_pct_22,
+                                   iws_develop,
+                                   iws_roaddensity_density_mperha,
+                                   rdDist_Interstate,rdDist_WIMN,connDR_LakeStream:connIsolated)
 
 ##grid search to select random forest hyperparameters
 control <- trainControl(method="oob", number=10, search="random")
@@ -155,22 +160,26 @@ ggplot()+
 ## Prediction for LAGOS 
 ```{r LAGOSpred}
 datPred2 = read_csv('data/LAGOS_allLakes.csv') %>%
-  filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
-  select(lagoslakeid:nhdid,"iws_ha","nhd_lat","nhd_long","iws_nlcd2011_pct_forest","iws_roaddensity_density_mperha","iws_nlcd2011_pct_impervious","iws_nlcd2011_pct_ag","lakeconnection","rdDist_Interstate", "rdDist_WI","rdDist_MN") %>%
-  filter(!is.na(iws_nlcd2011_pct_forest)) %>%
+  dplyr::filter(state_zoneid == 'State_9' | state_zoneid == 'State_14') %>% # Wisconsin and Minnesota 
   dplyr::mutate(rdDist_WIMN = pmin(rdDist_WI,rdDist_MN)) %>% 
-  mutate(iws_ha = log(iws_ha),
-         iws_nlcd2011_pct_forest = log(iws_nlcd2011_pct_forest+0.1),
-         iws_roaddensity_density_mperha = log(iws_roaddensity_density_mperha+0.1),
-         iws_nlcd2011_pct_ag = log(iws_nlcd2011_pct_ag+0.1),
-         iws_nlcd2011_pct_impervious = log(iws_nlcd2011_pct_impervious+0.1),
-         rdDist_Interstate = log(rdDist_Interstate),
-         rdDist_WIMN = log(rdDist_WIMN))
+  dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
+  dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23)
+
+datPred2 <- datPred2 %>%
+  mutate_at(vars(iws_nlcd2011_ha_0:iws_develop),log01) %>%
+  filter(!is.na(iws_nlcd2011_pct_22))
 
 dat_conn_dummy<-oneHot(datPred2$lakeconnection)
 datPred2<-cbind(datPred2,dat_conn_dummy)
-datPred2<- datPred2[,c("iws_nlcd2011_pct_forest","iws_nlcd2011_pct_impervious","rdDist_WIMN","rdDist_Interstate","nhd_lat","nhd_long","connDR_LakeStream","connDR_Stream", "connHeadwater", "connIsolated" )]
-
+datPred2<- datPred2 %>% select(nhd_lat,nhd_long,
+                               iws_forest,
+                               iws_nlcd2011_pct_81,
+                               iws_nlcd2011_pct_82,
+                               iws_nlcd2011_pct_21,
+                               iws_nlcd2011_pct_22,
+                               iws_develop,
+                          iws_roaddensity_density_mperha,
+                          rdDist_Interstate,rdDist_WIMN,connDR_LakeStream:connIsolated)
 
 preds <- predict(rf_model, newdata = datPred2)
 datPred2$clPred = preds
