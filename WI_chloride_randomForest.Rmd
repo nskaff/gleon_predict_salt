@@ -33,7 +33,7 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
   dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
   dplyr::group_by(lagoslakeid) %>%
-  dplyr::summarise_if(is.numeric,funs(mean)) %>% 
+  dplyr::summarise_if(is.numeric,list(~mean)) %>% 
   dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid))) 
 
 #adding connectivity dummies
