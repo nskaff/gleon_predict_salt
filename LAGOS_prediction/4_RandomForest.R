@@ -11,7 +11,7 @@ library(sf)
 library(LAGOSNE)
 library(caret)
 # Load data
-datin = read_csv("data3_LAGOS_ChlorideCovariates.csv")
+datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
 
 
 ## Tidy data
@@ -42,6 +42,7 @@ log01 <- function(x){log(x + 0.001)} # log of columns
 dat_rf <- dat %>%
   # filter_all(all_vars(!is.na(.))) %>%
   mutate_at(vars(Chloride,iws_ha:iws_develop),log01) %>%
+  mutate(cov_strat=cut(Chloride, 4)) %>%
   filter(!is.na(iws_nlcd2011_pct_22))
 
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
@@ -92,12 +93,60 @@ rf_model<-randomForest(y=dat_rf$Chloride,
                        keep.inbag = T, 
                        importance = T, 
                        ntree = 500,
-                       sampsize = 2885,
+                       sampsize=length(dat_rf$Chloride),
+                       strata = dat_rf$cov_strat,
                        mtry=10)
                        # mtry=length(rf_cov))
 
 rf_model   
 varImpPlot(rf_model)
+
+
+#stratified version of RF
+rf_model_lst_preds<-lapply(1:500,function(i){
+  
+dat_rf_strat <- data.frame(dat_rf %>%
+  mutate(id=row_number()) %>%
+  group_by(cov_strat) %>%
+  sample_n(31, replace=T))
+
+  
+rf_cov_strat<-dat_rf_strat %>% dplyr::select(#nhd_lat, nhd_long,
+  iws_forest,
+  iws_nlcd2011_pct_81,
+  iws_nlcd2011_pct_82,
+  iws_nlcd2011_pct_21,
+  iws_nlcd2011_pct_22,
+  iws_develop,
+  iws_roaddensity_density_mperha,
+  rdDist_Interstate,
+  winterseverity,
+  rdDist_Roads,
+  connDR_LakeStream:connIsolated)
+
+
+rf_model_lst<-randomForest(y=dat_rf_strat$Chloride, 
+                       x = rf_cov_strat, 
+                       keep.inbag = T, 
+                       importance = T, 
+                       ntree = 1,
+                       replace=F,
+                       sampsize=length(dat_rf_strat$Chloride),
+                       ytest=dat_rf$Chloride,
+                       xtest=rf_cov,
+                       mtry=10)
+
+rf_model_lst$test$predicted[dat_rf_strat$id]<-NA
+
+return(rf_model_lst$test$predicted)
+
+}
+)
+
+
+predicted_strat<-rowMeans(as.data.frame(rf_model_lst), na.rm=T)
+y_strat<-dat_rf$Chloride
+r2_strat<-1 - sum((y-predicted)^2)/sum((y-mean(y))^2)
 
 #you'll notice that your interpretation of the forestfloor plot will change as you adjust mtry and sampsize. 
 # You can prioritize different things with these values
@@ -112,7 +161,7 @@ ff_model<-forestFloor(rf_model,X = rf_cov,y= rf_model$y )
 Col = fcol(ff_model, 1, orderByImportance=T)
 plot(ff_model, col=Col, orderByImportance=T)
 
-dat_rf = dat_rf %>% mutate(predicted = rf_model$predicted)
+dat_rf = dat_rf %>% mutate(predicted = predicted)
 
 library(lme4)
 fitsO <- lm(predicted ~ Chloride, data=dat_rf) 
@@ -176,7 +225,7 @@ ggplot()+
 ############# ############# ############# ############# ############# ############# 
 ## Prediction for LAGOS ####
 
-allLagos = read_csv('data5_LAGOS_allLakes.csv') %>%
+allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
   dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
   dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
   filter(state_zoneid != 'OUT_OF_COUNTY_STATE') %>% 
@@ -206,11 +255,31 @@ allLagos.rf <- allLagos %>% dplyr::select(#nhd_lat,nhd_long,
 
 preds <- predict(rf_model, newdata = allLagos.rf)
 allLagos.rf$clPred = preds
-allLagos$clPred = preds
+#allLagos$clPred = preds
+
+preds_strat <- predict(rf_mod_strat, newdata = allLagos.rf)
+allLagos.rf$clPred_strat = preds_strat
+allLagos$clPred_strat = preds_strat
+
 
 # Plot prediction histogram 
 ggplot() + 
   geom_density(data = allLagos.rf, aes(x = exp(clPred), fill = "r"), alpha = 0.3) +
+  geom_density(data = dat_rf, aes(x = exp(Chloride), fill = "b"), alpha = 0.3) +
+  scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
+  scale_fill_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
+  scale_x_continuous(trans='log10') +
+  ylab('Density') + xlab(bquote('Chloride'~(mg~L^-1))) +
+  ggtitle("Predicted Chloride Concentrations in Lagos") +
+  theme_bw() +
+  geom_vline(xintercept = c(230,860),linetype = 2) +
+  annotate(geom='text',label = 'Cl = 230, EPA Chronic chloride toxicity',x = 190, y = 0.4, angle = 90) +
+  annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.4, angle = 90)
+
+
+#plotting prediction histogram of stratified predictions vs observed training data
+ggplot() + 
+  geom_density(data = data.frame(predicted=predicted), aes(x = exp(predicted), fill = "r"), alpha = 0.3) +
   geom_density(data = dat_rf, aes(x = exp(Chloride), fill = "b"), alpha = 0.3) +
   scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
   scale_fill_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
