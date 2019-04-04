@@ -136,11 +136,11 @@ samp_df
 
 ####stratified version of RF####
 unique_lakes<-unique(dat_rf$lagoslakeid)
-lake_prop<-.7
-ntree<-50
-highval_prop<-.25
-vhighval_prop<-.7
-lowval_prop<-.05
+lake_prop<-.9
+ntree<-100
+highval_prop<-.01
+vhighval_prop<-1.5
+lowval_prop<-.1
 
 rf_model_lst_preds<-lapply(1:ntree,function(i){
   
