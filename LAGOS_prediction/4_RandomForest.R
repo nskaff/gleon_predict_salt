@@ -10,6 +10,7 @@ library(scales)
 library(sf)
 library(LAGOSNE)
 library(caret)
+library(lubridate)
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
 
@@ -21,13 +22,12 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::filter(ActivityStartDate > as.Date('1990-01-01')) %>%
   dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
   dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
-  dplyr::group_by(lagoslakeid) %>%
-  dplyr::summarise_if(is.numeric,list(~mean)) %>% 
-  dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,State))) 
+   dplyr::group_by(ActivityStartDate, lagoslakeid) %>%
+   dplyr::summarise_if(is.numeric,list(~mean) )%>%
+   dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,State))) 
   # group_by(State) %>%
   # filter(n() > 10) %>% ungroup()
 
-table(dat$State)
 
 #adding connectivity dummies
 oneHot=function(x) {
@@ -36,32 +36,59 @@ oneHot=function(x) {
 }
 
 dat_conn_dummy <- oneHot(dat$lakeconnection)
-dat <- cbind(dat,dat_conn_dummy)
+
+dat <- cbind(data.frame(dat),data.frame(dat_conn_dummy))
 
 log01 <- function(x){log(x + 0.001)} # log of columns 
 dat_rf <- dat %>%
   # filter_all(all_vars(!is.na(.))) %>%
-  mutate_at(vars(Chloride,iws_ha:iws_develop),log01) %>%
-  mutate(cov_strat=cut(Chloride, 4)) %>%
-  filter(!is.na(iws_nlcd2011_pct_22))
+  mutate_at(vars(Chloride,wlconnections_allwetlands_count:winterseverity),log01) %>%
+  mutate(cov_strat=ifelse(Chloride>5.9, "high", ifelse(Chloride>5.4,"vhigh", "low")), month=month(ActivityStartDate)) %>%filter(!is.na(iws_nlcd2011_pct_22))
 
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
 
-
 ## Random Forest model 
-rf_cov <- dat_rf %>% dplyr::select(#nhd_lat, nhd_long,
-                                   iws_forest,
-                                   iws_nlcd2011_pct_81,
-                                   iws_nlcd2011_pct_82,
-                                   iws_nlcd2011_pct_21,
-                                   iws_nlcd2011_pct_22,
-                                   iws_develop,
-                                   iws_roaddensity_density_mperha,
-                                   rdDist_Interstate,
-                                   winterseverity,
-                                   rdDist_Roads,
-                                   connDR_LakeStream:connIsolated)
 
+rf_cov <- dat_rf %>% dplyr::select(#nhd_lat, nhd_long,
+  # month,
+  iws_forest,
+  iws_nlcd2011_pct_81,
+  iws_nlcd2011_pct_82,
+  iws_nlcd2011_pct_21,
+  iws_nlcd2011_pct_22,
+  iws_develop,
+  iws_roaddensity_density_mperha,
+  rdDist_Interstate,
+  winterseverity,
+  rdDist_Roads,
+  connDR_LakeStream:connIsolated)
+
+###all lagos data for later predictions
+allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
+  dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
+  dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
+  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') %>% 
+  filter(!lagoslakeid %in% dat$lagoslakeid)
+
+allLagos <- allLagos %>%
+  # filter_all(all_vars(!is.na(.))) %>%
+  mutate_at(vars(iws_nlcd2011_ha_0:iws_develop),log01) %>%
+  filter(!is.na(iws_nlcd2011_pct_22))
+
+#sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
+
+dat_conn_dummy<-oneHot(allLagos$lakeconnection)
+allLagos<-cbind(allLagos,dat_conn_dummy)
+allLagos.rf <- allLagos %>% dplyr::select(colnames(rf_cov))
+
+
+
+
+
+
+
+
+#######Don't run unless you've got some time####
 ##grid search to select random forest hyperparameters
 control <- trainControl(method="oob", number=10, search="random")
 rf_random <- train(y=dat_rf$Chloride, x = rf_cov, method="rf",tuneLength=15, trControl=control)
@@ -87,43 +114,58 @@ for (i in 1:length(sampsize) ){
 }
 samp_df
 #sampsize around the max is pretty good, though it's not the worst idea to reduce this value to decorrelate each tree
+######
 
-rf_model<-randomForest(y=dat_rf$Chloride, 
-                       x = rf_cov, 
-                       keep.inbag = T, 
-                       importance = T, 
-                       ntree = 500,
-                       sampsize=length(dat_rf$Chloride),
-                       strata = dat_rf$cov_strat,
-                       mtry=10)
-                       # mtry=length(rf_cov))
+####final rf model####
+# rf_model<-randomForest(y=dat_rf$Chloride,
+#                        x = rf_cov,
+#                        keep.inbag = T,
+#                        importance = T,
+#                        ntree = 50,
+#                        sampsize=10000,
+#                        mtry=10)
+#                        # mtry=length(rf_cov))
+# 
+# rf_model
+# varImpPlot(rf_model)
+# ff_model<-forestFloor(rf_model,X = rf_cov,y= rf_model$y )
+# Col = fcol(ff_model, 1, orderByImportance=T)
+# plot(ff_model, col=Col, orderByImportance=T)
+#####
 
-rf_model   
-varImpPlot(rf_model)
 
+####stratified version of RF####
+unique_lakes<-unique(dat_rf$lagoslakeid)
+lake_prop<-.7
+ntree<-50
+highval_prop<-.5
+vhighval_prop<-.4
+lowval_prop<-.1
 
-#stratified version of RF
-rf_model_lst_preds<-lapply(1:500,function(i){
+rf_model_lst_preds<-lapply(1:ntree,function(i){
   
-dat_rf_strat <- data.frame(dat_rf %>%
-  mutate(id=row_number()) %>%
-  group_by(cov_strat) %>%
-  sample_n(31, replace=T))
+train_lakes<-sample(unique_lakes, size =ceiling(length(unique_lakes)*lake_prop) )
 
-  
-rf_cov_strat<-dat_rf_strat %>% dplyr::select(#nhd_lat, nhd_long,
-  iws_forest,
-  iws_nlcd2011_pct_81,
-  iws_nlcd2011_pct_82,
-  iws_nlcd2011_pct_21,
-  iws_nlcd2011_pct_22,
-  iws_develop,
-  iws_roaddensity_density_mperha,
-  rdDist_Interstate,
-  winterseverity,
-  rdDist_Roads,
-  connDR_LakeStream:connIsolated)
+#https://stackoverflow.com/questions/51671856/dplyr-sample-n-by-group-with-unique-size-argument-per-group
+dat_rf_strat <- data.frame(dat_rf  %>%
+                               mutate(id=row_number()) %>%
+                              filter(lagoslakeid %in% train_lakes) )
+                           #%>%
+                             # mutate(frq=ifelse(cov_strat=="high",
+                             #                   ceiling(highval_prop*n()),
+                             #                   ifelse(cov_strat=="vhigh",
+                             #                          ceiling(vhighval_prop*n()),
+                             #                   ceiling((lowval_prop)*n())))) %>%
+                             #   group_by(cov_strat) %>%
+                             #    nest() %>%
+                             # mutate(v = map(data, 
+                             #                ~sample_n(data.frame(.), 
+                             #                          unique(.$frq), replace=T))) %>%
+                             # unnest(v))
 
+
+
+rf_cov_strat<-dat_rf_strat %>% select(colnames(rf_cov))
 
 rf_model_lst<-randomForest(y=dat_rf_strat$Chloride, 
                        x = rf_cov_strat, 
@@ -134,19 +176,41 @@ rf_model_lst<-randomForest(y=dat_rf_strat$Chloride,
                        sampsize=length(dat_rf_strat$Chloride),
                        ytest=dat_rf$Chloride,
                        xtest=rf_cov,
-                       mtry=10)
+                       mtry=10,
+                       norm.votes=F,
+                       keep.forest=TRUE )
 
+#predictions for all lagos
+lagos_pred<-predict(rf_model_lst, newdata=allLagos.rf)
+
+#removing insample predictions
 rf_model_lst$test$predicted[dat_rf_strat$id]<-NA
 
-return(rf_model_lst$test$predicted)
+
+return(list(rf_model_lst$test$predicted, lagos_pred,rf_model_lst))
+#return(rf_model_lst$test$predicted)
 
 }
 )
 
+#calculating oob predictions for training data
+oob_preds_combined<-data.frame(rf_model_lst_preds[[1]][[1]])
+for(i in 2:ntree){ oob_preds_combined<-
+  cbind(oob_preds_combined,rf_model_lst_preds[[i]][[1]])
+}
+oob_preds_combined<-rowMeans(oob_preds_combined, na.rm=T)
 
-predicted_strat<-rowMeans(as.data.frame(rf_model_lst), na.rm=T)
-y_strat<-dat_rf$Chloride
-r2_strat<-1 - sum((y-predicted)^2)/sum((y-mean(y))^2)
+plot(oob_preds_combined~dat_rf$Chloride, main=cor(oob_preds_combined, dat_rf$Chloride) ^ 2)
+
+
+#calculating predictions for all lagos
+alllagos_preds_combined<-data.frame(rf_model_lst_preds[[1]][[2]])
+for(i in 2:ntree){alllagos_preds_combined<-
+  data.frame(alllagos_preds_combined,rf_model_lst_preds[[i]][[2]])}
+alllagos_preds_combined<-rowMeans(alllagos_preds_combined, na.rm=T)
+#####
+
+
 
 #you'll notice that your interpretation of the forestfloor plot will change as you adjust mtry and sampsize. 
 # You can prioritize different things with these values
@@ -157,9 +221,7 @@ plot(rf_model$rsq~c(1:500))
 #pretty good by 100 trees
 
 
-ff_model<-forestFloor(rf_model,X = rf_cov,y= rf_model$y )
-Col = fcol(ff_model, 1, orderByImportance=T)
-plot(ff_model, col=Col, orderByImportance=T)
+
 
 dat_rf = dat_rf %>% mutate(predicted = predicted)
 
@@ -222,49 +284,17 @@ ggplot()+
 
 
 
+
+
+
+
+
 ############# ############# ############# ############# ############# ############# 
-## Prediction for LAGOS ####
-
-allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
-  dplyr::mutate(iws_forest = iws_nlcd2011_pct_41 + iws_nlcd2011_pct_42 +iws_nlcd2011_pct_43) %>% 
-  dplyr::mutate(iws_develop = iws_nlcd2011_pct_24 + iws_nlcd2011_pct_23) %>% 
-  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') %>% 
-  filter(!lagoslakeid %in% dat$lagoslakeid)
-
-allLagos <- allLagos %>%
-  # filter_all(all_vars(!is.na(.))) %>%
-  mutate_at(vars(iws_nlcd2011_ha_0:iws_develop),log01) %>%
-  filter(!is.na(iws_nlcd2011_pct_22))
-
-sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
-
-dat_conn_dummy<-oneHot(allLagos$lakeconnection)
-allLagos<-cbind(allLagos,dat_conn_dummy)
-allLagos.rf <- allLagos %>% dplyr::select(#nhd_lat,nhd_long,
-                               iws_forest,
-                               iws_nlcd2011_pct_81,
-                               iws_nlcd2011_pct_82,
-                               iws_nlcd2011_pct_21,
-                               iws_nlcd2011_pct_22,
-                               iws_develop,
-                               iws_roaddensity_density_mperha,
-                               rdDist_Interstate,
-                               rdDist_Roads,
-                               winterseverity,
-                               connDR_LakeStream:connIsolated)
-
-preds <- predict(rf_model, newdata = allLagos.rf)
-allLagos.rf$clPred = preds
-#allLagos$clPred = preds
-
-preds_strat <- predict(rf_mod_strat, newdata = allLagos.rf)
-allLagos.rf$clPred_strat = preds_strat
-allLagos$clPred_strat = preds_strat
-
+## plotsS ####
 
 # Plot prediction histogram 
 ggplot() + 
-  geom_density(data = allLagos.rf, aes(x = exp(clPred), fill = "r"), alpha = 0.3) +
+  geom_density(aes(x = exp(oob_preds_combined), fill = "r"), alpha = 0.3) +
   geom_density(data = dat_rf, aes(x = exp(Chloride), fill = "b"), alpha = 0.3) +
   scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
   scale_fill_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
@@ -279,8 +309,8 @@ ggplot() +
 
 #plotting prediction histogram of stratified predictions vs observed training data
 ggplot() + 
-  geom_density(data = data.frame(predicted=predicted), aes(x = exp(predicted), fill = "r"), alpha = 0.3) +
-  geom_density(data = dat_rf, aes(x = exp(Chloride), fill = "b"), alpha = 0.3) +
+  geom_density( aes(x = exp(alllagos_preds_combined), fill = "r"), alpha = 0.3) +
+  geom_density( aes(x = exp(oob_preds_combined), fill = "b"), alpha = 0.3) +
   scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
   scale_fill_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
   scale_x_continuous(trans='log10') +
@@ -293,7 +323,7 @@ ggplot() +
 
 # ggsave(filename = 'Figure_LAGOSpredictions.png',width = 8,height = 6)
 
-```
+
 # write_csv(allLagos,'data6_output_data_allLagosPredictions.csv')
 
 a = allLagos %>% filter(clPred > log(100)) %>% 
