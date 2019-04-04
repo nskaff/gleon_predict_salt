@@ -138,9 +138,9 @@ samp_df
 unique_lakes<-unique(dat_rf$lagoslakeid)
 lake_prop<-.7
 ntree<-50
-highval_prop<-.5
-vhighval_prop<-.4
-lowval_prop<-.1
+highval_prop<-.25
+vhighval_prop<-.7
+lowval_prop<-.05
 
 rf_model_lst_preds<-lapply(1:ntree,function(i){
   
@@ -149,19 +149,18 @@ train_lakes<-sample(unique_lakes, size =ceiling(length(unique_lakes)*lake_prop) 
 #https://stackoverflow.com/questions/51671856/dplyr-sample-n-by-group-with-unique-size-argument-per-group
 dat_rf_strat <- data.frame(dat_rf  %>%
                                mutate(id=row_number()) %>%
-                              filter(lagoslakeid %in% train_lakes) )
-                           #%>%
-                             # mutate(frq=ifelse(cov_strat=="high",
-                             #                   ceiling(highval_prop*n()),
-                             #                   ifelse(cov_strat=="vhigh",
-                             #                          ceiling(vhighval_prop*n()),
-                             #                   ceiling((lowval_prop)*n())))) %>%
-                             #   group_by(cov_strat) %>%
-                             #    nest() %>%
-                             # mutate(v = map(data, 
-                             #                ~sample_n(data.frame(.), 
-                             #                          unique(.$frq), replace=T))) %>%
-                             # unnest(v))
+                              filter(lagoslakeid %in% train_lakes) %>%
+                             mutate(frq=ifelse(cov_strat=="high",
+                                               ceiling(highval_prop*n()),
+                                               ifelse(cov_strat=="vhigh",
+                                                      ceiling(vhighval_prop*n()),
+                                               ceiling((lowval_prop)*n())))) %>%
+                               group_by(cov_strat) %>%
+                                nest() %>%
+                             mutate(v = map(data,
+                                            ~sample_n(data.frame(.),
+                                                      unique(.$frq), replace=T))) %>%
+                             unnest(v))
 
 
 
