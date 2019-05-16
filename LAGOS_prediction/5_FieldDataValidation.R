@@ -69,7 +69,7 @@ clmean = cldata %>%
   st_transform(crs = st_crs(nhd1)) 
 
 rioverlap = clmean %>% st_join(nhd1, left=TRUE) %>% 
-  dplyr::select(lagoslakeid = lagoslakei, GNIS_Name,code:chloride)
+  dplyr::select(lagoslakeid = lagoslakei, Zmax__m_,GNIS_Name,code:chloride)
 st_geometry(rioverlap) = NULL
 
 predictionsRI = rioverlap %>% left_join(allLagos) %>% 
@@ -78,17 +78,31 @@ predictionsRI = rioverlap %>% left_join(allLagos) %>%
   filter(!lagoslakeid %in% modeledLakes) # which haven't been used in the model 
 
 b = predictionsRI %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), newcl = first(newcl))
+  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), newcl = first(newcl), depth = mean(Zmax__m_))
 
-ggplot(b, aes(x = mean, y = newcl), alpha = 0.7) + geom_point() +
+ggplot(b, aes(x = mean, y = newcl), alpha = 0.7) + geom_point(aes(color = depth)) +
   geom_errorbarh(aes(xmax = min, xmin = max), color = 'black',alpha = 0.6) +
   geom_abline(intercept = 0, slope = 1) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted RI chloride') +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
-  scale_colour_viridis_d(direction = -1)
+  scale_colour_viridis_c(direction = -1)
 
 # ggsave(filename = 'LAGOS_data_Austin/Figure_predictions_RI_max.png',width = 6, height = 4, units = 'in')
+
+# library(maps)
+# ## Get the states map, turn into sf object
+# US <- st_as_sf(map("state", plot = FALSE, fill = TRUE))
+# US = st_transform(US, st_crs(nhd1))
+# # Make it a spatial dataframe, using the same coordinate system as the US spatial dataframe
+# #.. and perform a spatial join!
+# 
+# test = rioverlap %>% left_join(select(predictionsRI,lagoslakeid,cldiff)) %>%
+#   mutate(cldifflog = log(cldiff))
+# plot(st_geometry(US[38,]),border = 'grey', axes = TRUE)
+# plot(test["cldifflog"], pch = 16,add=T)
+# st_write(test,dsn = '~/Dropbox/currentprojects/SaltBayes/RI_data/GIS/rhodeislandCL.shp')
+
 
 ############# ############# ############# ############# ############# ############# 
 ############# Compare to Minnesota field data ############# 
@@ -170,5 +184,5 @@ ggplot(allPredictions, aes(x = chloride, y = newcl, fill = State)) + geom_point(
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   theme_bw() +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
-# ggsave(filename = 'LAGOS_data_Austin/Figure_predictions_WIMNRI.png',width = 6, height = 4, units = 'in')
+ggsave(filename = 'LAGOS_prediction/Figure_predictions_WIMNRI.png',width = 7, height = 5, units = 'in')
 
