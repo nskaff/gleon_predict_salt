@@ -4,6 +4,7 @@
 
 library(forestFloor)
 library(randomForest)
+library(ranger)
 library(tidyverse)
 library(scales)
 library(sf)
@@ -11,12 +12,15 @@ library(LAGOSNE)
 library(caret)
 library(lubridate)
 library(parallel)
+library(devtools)
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
 
+df <- unclass(datin)
 
 ## Tidy data
 # total data (80k, after 1990 69k, after taking mean of measurements from same day 35k, filter out deep measurements 35k)
+
 dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::mutate(Chloride = ifelse(Chloride == 0, 0.0001, Chloride)) %>%
   # dplyr::filter(!(coastdist < 4)) %>%
@@ -30,7 +34,7 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   # dplyr::mutate(buffer500m_ag = buffer500m_nlcd2011_pct_81 + buffer500m_nlcd2011_pct_82) %>% 
   # dplyr::mutate(buffer500m_develop = buffer500m_nlcd2011_pct_24 + buffer500m_nlcd2011_pct_23 + buffer500m_nlcd2011_pct_22 + buffer500m_nlcd2011_pct_21) %>% 
   dplyr::group_by(ActivityStartDate, lagoslakeid) %>%
-  dplyr::summarise_if(is.numeric,list(~mean) )%>%
+  dplyr::summarise_if(is.numeric,list(mean) )%>%
   dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,State))) 
 # group_by(State) %>%
 # filter(n() > 10) %>% ungroup()
@@ -58,6 +62,73 @@ rf_cov <- dat_rf %>% dplyr::select(month,lake_area_ha,iws_ha,
                                    iws_nlcd2011_pct_0:iws_roaddensity_density_mperha,
                                    buffer500m_nlcd2011_pct_0:TonsPerMile)
 sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
+
+
+##ranger version of random forest
+#generating a matrix of in-bag and out of bag observations
+ntree=500
+random_lake_samps<-lapply(1:ntree, function(i){
+  
+  #print(i)
+  unique_lakes<-unique(dat_rf$lagoslakeid)
+  
+  #sample 10% of unique sites
+  lake_samp<- sample(unique_lakes, size =.1*length(unique_lakes), replace=F)
+  
+  #take a full bootstrap sample of the in-sample lakes. Leaving this with replace F but can be adjusted later
+  expand_samp<-sample(as.numeric(row.names(dat_rf))[!(dat_rf$lagoslakeid %in% lake_samp) ], replace=F )
+  
+  #counting the number of bootstrap samples for each observation
+  samp_count<-plyr::count(expand_samp)
+  
+  
+  #joining the in-bag sample with the out of bag sample index
+  df<-full_join(samp_count, data.frame(x=as.numeric(row.names(dat_rf))[!(row.names(dat_rf) %in% samp_count$x)]), by="x")
+  
+  #ordering by row number
+  samp<-as.numeric(df[order(as.numeric(df$x)),"freq"])
+  
+  #converting NA to 0 for withheld lakes
+  samp[is.na(samp)]<-0
+  
+  
+  return(samp)
+  
+  
+}
+)
+
+
+rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),inbag=random_lake_samps, num.trees=ntree, importance = "permutation", keep.inbag = T, mtry=20)
+
+rf_model$predictions
+
+#variable importance
+v<-as.numeric(rf_model$variable.importance)
+w<-as.character((names(rf_model$variable.importance)))
+DF<-data.frame(w=w,v=as.numeric(v))
+
+DF$w<-factor(DF$w, levels =DF[order(as.numeric(DF$v)),"w"] )
+
+ggplot(DF[order(as.numeric(DF$v)),][(nrow(DF)-20):nrow(DF),], aes(x=w, y=v,fill=v))+
+  geom_bar(stat="identity", position="dodge")+ coord_flip()+
+  ylab("Variable Importance")+
+  xlab("")+
+  ggtitle("Information Value Summary")+
+  guides(fill=F)
+
+##feature contributions for forestfloor
+source("ranger_RFadaptor.R")
+
+ff_rf_model<-ranger_RFadaptor(rf_model,dat_rf$Chloride)
+
+ffra = forestFloor(ff_rf_model,rf_cov,calc_np = TRUE)
+
+#color by most important feature
+Col = fcol(ffra ,1)
+
+plot(ffra, plot_seq=c(1,2,3,4),plot_GOF=F, limitY=F, col=Col,orderByImportance = T)
+
 
 
 # rf_model<-randomForest(y=dat_rf$Chloride, 
