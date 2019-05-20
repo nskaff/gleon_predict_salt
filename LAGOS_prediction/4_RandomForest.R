@@ -129,7 +129,7 @@ ffra = forestFloor(ff_rf_model,rf_cov,calc_np = TRUE)
 #color by most important feature
 Col = fcol(ffra ,1)
 
-plot(ffra, plot_seq=c(1,2,3,4),plot_GOF=F, limitY=F, col=Col,orderByImportance = T)
+plot(ffra, plot_seq=c(1,2,4,6,8),plot_GOF=F, limitY=F, col=Col,orderByImportance = T)
 
 
 
