@@ -101,6 +101,8 @@ random_lake_samps<-lapply(1:ntree, function(i){
 
 rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),inbag=random_lake_samps, num.trees=ntree, importance = "permutation", keep.inbag = T, mtry=20)
 
+rf_model
+
 rf_model$predictions
 
 #variable importance
