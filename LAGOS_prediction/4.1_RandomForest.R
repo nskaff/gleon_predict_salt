@@ -69,11 +69,12 @@ random_lake_samps <- lapply(1:ntree, function(i){
   
   # unique_lakes<-unique(dat_rf$lagoslakeid)
   
-  #sample 90% of unique sites
+  ## Hilary's condensed code (the same as Nick's?)
+  # sample 90% of unique sites
   # lake_samp <- sample(unique_lakes, size =.9*length(unique_lakes), replace=F)
   # samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
   
-  
+  ## Nick's original code
   # #take a full bootstrap sample of the in-sample lakes. Leaving this with replace F but can be adjusted later
   # expand_samp<-sample(as.numeric(row.names(dat_rf))[dat_rf$lagoslakeid %in% lake_samp ], replace=F )
   # 
@@ -275,6 +276,6 @@ b = allLagos %>% select(lagoslakeid:lakeconnection,predictionAug) %>%
   st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
 library(mapview)
 library(viridisLite)
-m = b %>% mapview(zcol = "expCl", col.regions = magma(7),layer.name = 'Predicted Chloride (mg/L)')
+m = b %>% mapview(zcol = "expCl", layer.name = 'Predicted Chloride (mg/L)')
 m
 mapshot(m, url = paste0(getwd(), "/html/map.html"))
