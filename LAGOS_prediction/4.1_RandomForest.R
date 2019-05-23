@@ -253,8 +253,6 @@ library(tigris)
 states <- states(cb = TRUE)
 states_sf<- st_as_sf(states)
 
-
-
 # LAGOS region
 ggplot(data=dat_rf.sum) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
