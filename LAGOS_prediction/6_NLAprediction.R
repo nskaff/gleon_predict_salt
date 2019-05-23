@@ -55,3 +55,4 @@ ggplot(predictionsNLA, aes(x = cl, y = newcl)) + geom_point(aes(color = nhd_lat)
   theme_bw() 
 ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
 
+

@@ -37,10 +37,6 @@ log01 <- function(x){log(x + 0.001)} # log of columns
 dat_rf <- dat %>%
   # filter_all(all_vars(!is.na(.))) %>%
   mutate_at(vars(Chloride,lake_area_ha,iws_ha,wlconnections_allwetlands_count:rdDist_Roads),log01) %>%
-  mutate(cov_strat = case_when(Chloride > 5.5 ~ "vhigh",
-                               Chloride > 3 & Chloride <= 5.5 ~ "high",
-                               Chloride <= 3 ~ "low")) %>% 
-  # mutate(cov_strat=ifelse(Chloride>5.9, "vhigh", ifelse(Chloride>4,"high", "low"))) %>%  
   mutate(month = month(ActivityStartDate)) %>%
   filter(!is.na(iws_nlcd2011_pct_22)) %>% 
   filter(!is.na(TonsPerMile)) %>% 
@@ -56,24 +52,39 @@ rf_cov <- dat_rf %>% dplyr::select(month,lake_area_ha,iws_ha,
 sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 
 
+cw = dat_rf %>% select(lagoslakeid) %>%
+  group_by(lagoslakeid) %>% mutate(m = n()) %>% 
+  ungroup() %>% 
+  mutate(cw = sqrt(max(m)/m))
+dat_rf$cw = round(cw$cw,0)
 ##ranger version of random forest
 #generating a matrix of in-bag and out of bag observations
-ntree=1000
+ntree = 1000
+
 random_lake_samps <- lapply(1:ntree, function(i){
   #print(i)
   
-  singleLake = dat_rf %>% 
-    group_by(lagoslakeid) %>% summarise(id = sample(id,size = 1)) %>% 
-    sample_frac(0.9)
-  samp = as.integer(dat_rf$id %in% singleLake$id)
+  # singleLake = dat_rf %>%
+  #   group_by(lagoslakeid) %>% summarise(id = sample(id,size = 1)) %>%
+  #   sample_frac(0.9)
+  # samp = dat_rf %>% mutate(cw = case_when(
+  #   id %in% singleLake$id & lagoslakeid %in% singleLake$lagoslakeid ~ 1,
+  #   !id %in% singleLake$id & lagoslakeid %in% singleLake$lagoslakeid ~ NA_real_,
+  #   !lagoslakeid %in% singleLake$lagoslakeid ~ 0)) %>% 
+  #   pull(cw)
   
+  # ## Hilary's condensed code (the same as Nick's?)
+  # #Class weights
   # unique_lakes<-unique(dat_rf$lagoslakeid)
-  
-  ## Hilary's condensed code (the same as Nick's?)
-  # sample 90% of unique sites
-  # lake_samp <- sample(unique_lakes, size =.9*length(unique_lakes), replace=F)
-  # samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
-  
+  # lake_samp = dat_rf$lagoslakeid %in% sample(unique_lakes, size =.95*length(unique_lakes), replace=F)
+  # samp = dat_rf %>% mutate(use = ifelse(lake_samp == TRUE,cw,0)) %>%
+  #   pull(use)
+
+  # # Only 1s and 0s
+  unique_lakes<-unique(dat_rf$lagoslakeid)
+  lake_samp <- sample(unique_lakes, size =.9*length(unique_lakes), replace=F)
+  samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
+
   ## Nick's original code
   # #take a full bootstrap sample of the in-sample lakes. Leaving this with replace F but can be adjusted later
   # expand_samp<-sample(as.numeric(row.names(dat_rf))[dat_rf$lagoslakeid %in% lake_samp ], replace=F )
@@ -93,22 +104,23 @@ random_lake_samps <- lapply(1:ntree, function(i){
 }
 )
 
-rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),inbag=random_lake_samps, num.trees=ntree, importance = "permutation", keep.inbag = T, mtry=20)
+  
+rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
+                 inbag=random_lake_samps,
+                 num.trees=ntree, importance = "permutation", keep.inbag = T, 
+                 mtry=20)
 rf_model
 
-rf_model$predictions
 
 #variable importance
 v<-as.numeric(rf_model$variable.importance)
-w<-as.character((names(rf_model$variable.importance)))
-DF<-data.frame(w=w,v=as.numeric(v))
+w<-as.character(names(rf_model$variable.importance))
+DF<-data.frame(w=w,v=as.numeric(v)) %>% arrange(v)
+DF$w <- factor(DF$w, levels = DF$w)
 
-DF$w<-factor(DF$w, levels =DF[order(as.numeric(DF$v)),"w"] )
-
-ggplot(DF[order(as.numeric(DF$v)),][(nrow(DF)-20):nrow(DF),], aes(x=w, y=v,fill=v))+
-  geom_bar(stat="identity", position="dodge")+ coord_flip()+
-  ylab("Variable Importance")+
-  xlab("")+
+ggplot(DF, aes(x=w, y=v,fill=v))+
+  geom_bar(stat="identity", position="dodge") + coord_flip() +
+  ylab("Variable Importance") + xlab("")+
   ggtitle("Information Value Summary")+
   guides(fill=F)
 
@@ -121,22 +133,6 @@ ffra = forestFloor(ff_rf_model,rf_cov,calc_np = TRUE)
 #color by most important feature
 Col = fcol(ffra ,1)
 plot(ffra, plot_seq=c(1,2,4,6,8),plot_GOF=F, limitY=F, col=Col,orderByImportance = T)
-
-
-###all lagos data for later predictions
-allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
-  mutate(month = 8) %>% 
-  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
-
-allLagos <- allLagos %>%
-  mutate_at(vars(lake_area_ha,iws_ha,iws_nlcd2011_ha_0:rdDist_Roads),log01) %>%
-  filter(!is.na(iws_nlcd2011_pct_22))
-
-sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
-allLagos.rf <- allLagos %>% dplyr::select(colnames(rf_cov))
-lagos_pred_Aug <- predict(rf_model, data = allLagos.rf)
-
-  
 
 # ### Examine outliers ###
 dat_rf$pred = rf_model$predictions
@@ -155,6 +151,18 @@ ggsave('LAGOS_prediction/Figure_modelCor.png',width = 7,height = 5)
 
 
 #calculating predictions for all lagos
+###all lagos data for later predictions
+allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
+  mutate(month = 8) %>% 
+  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
+
+allLagos <- allLagos %>%
+  mutate_at(vars(lake_area_ha,iws_ha,iws_nlcd2011_ha_0:rdDist_Roads),log01) %>%
+  filter(!is.na(iws_nlcd2011_pct_22))
+
+sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
+allLagos.rf <- allLagos %>% dplyr::select(colnames(rf_cov))
+lagos_pred_Aug <- predict(rf_model, data = allLagos.rf)
 allLagos$predictionAug = lagos_pred_Aug$predictions
 # write_csv(alllagos_preds_Aug,'output_data_allLagosPredictions.csv')
 
