@@ -13,6 +13,7 @@ library(caret)
 library(lubridate)
 library(parallel)
 library(devtools)
+
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
 
@@ -51,6 +52,8 @@ rf_cov <- dat_rf %>% dplyr::select(month,lake_area_ha,iws_ha,
                                    buffer500m_nlcd2011_pct_0:TonsPerMile)
 sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 
+
+# rf_cov <- dat_rf[,names(dat_rf) %in% tail(DF$w,10)]
 
 cw = dat_rf %>% select(lagoslakeid) %>%
   group_by(lagoslakeid) %>% mutate(m = n()) %>% 
@@ -108,7 +111,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
                  inbag=random_lake_samps,
                  num.trees=ntree, importance = "permutation", keep.inbag = T, 
-                 mtry=20)
+                 mtry=6)
 rf_model
 
 
@@ -123,6 +126,7 @@ ggplot(DF, aes(x=w, y=v,fill=v))+
   ylab("Variable Importance") + xlab("")+
   ggtitle("Information Value Summary")+
   guides(fill=F)
+ggsave('LAGOS_prediction/Figure_ValueSummary.png',width = 6,height = 6)
 
 ##feature contributions for forestfloor
 source("ranger_RFadaptor.R")
@@ -213,7 +217,7 @@ ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 5)
 
 
 p1 = ggplot(dat_rf.sum, aes(x = exp(meanCl), y = exp(pred))) + geom_point() + geom_abline(linetype = 'dashed') +
-  ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+  ylab(bquote('Predicted Mean Chloride'~(mg~L^-1))) + xlab(bquote('Observed Mean Chloride'~(mg~L^-1))) +
   labs(title = paste0('Modeled chloride (n = ',nrow(dat_rf),')')) +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +

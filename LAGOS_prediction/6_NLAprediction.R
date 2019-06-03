@@ -34,7 +34,7 @@ predictionsNLA = nla.overlap %>% left_join(allLagos) %>%
   filter(!lagoslakeid %in% dat$lagoslakeid)  %>%  # which haven't been used in the model 
   select(lagoslakeid:nhd_long,predictionAug:cldiff) %>% 
   group_by(lagoslakeid) %>% 
-  dplyr::summarise_if(is.numeric,list(~mean)) %>% 
+  dplyr::summarise_at(vars(cl,predictionAug,newcl,cldiff,nhd_lat,nhd_long), mean, na.rm=T) %>% 
   dplyr::left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) 
 
 
@@ -51,8 +51,8 @@ ggplot(predictionsNLA, aes(x = cl, y = newcl)) + geom_point(aes(color = nhd_lat)
   labs(title = 'Predicted NLA chloride') +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   scale_colour_viridis_c(direction = -1) +
-  geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
+  geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
   theme_bw() 
 ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
-
+ 
 
