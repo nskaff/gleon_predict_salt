@@ -35,7 +35,8 @@ predictionsNLA = nla.overlap %>% left_join(allLagos) %>%
   select(lagoslakeid:nhd_long,predictionAug:cldiff) %>% 
   group_by(lagoslakeid) %>% 
   dplyr::summarise_at(vars(cl,predictionAug,newcl,cldiff,nhd_lat,nhd_long), mean, na.rm=T) %>% 
-  dplyr::left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) 
+  dplyr::left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) %>% 
+  filter(!lagoslakeid %in% dat_rf$lagoslakeid) # None of the lakes are duplicated
 
 
 fitsO <- lm(predictionAug ~ log(cl), data = predictionsNLA) 
