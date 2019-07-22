@@ -13,6 +13,7 @@ library(caret)
 library(lubridate)
 library(parallel)
 library(devtools)
+library(corrplot)
 
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
@@ -33,6 +34,12 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,State))) 
 dat = data.frame(dat)
 
+#Correlation Matrix
+png(file = "LAGOS_prediction/correlationPlot.png",width = 15,height = 15, units = 'in', res = 300)
+  dat.cor = round(cor(dat[,8:71],use = 'complete.obs'),2)
+  corrplot(dat.cor, method = "ellipse")
+dev.off()
+
 
 log01 <- function(x){log(x + 0.001)} # log of columns 
 dat_rf <- dat %>%
@@ -42,7 +49,11 @@ dat_rf <- dat %>%
   filter(!is.na(iws_nlcd2011_pct_22)) %>% 
   filter(!is.na(TonsPerMile)) %>% 
   mutate(id=row_number())
-
+#Correlation Matrix on log values 
+png(file = "LAGOS_prediction/correlationPlot_log.png",width = 15,height = 15, units = 'in', res = 300)
+  dat.cor = round(cor(dat_rf[,8:71],use = 'complete.obs'),2)
+  corrplot(dat.cor, method = "ellipse")
+dev.off()
 
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
 
@@ -55,7 +66,7 @@ sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 
 # rf_cov <- dat_rf[,names(dat_rf) %in% tail(DF$w,10)]
 
-cw = dat_rf %>% select(lagoslakeid) %>%
+cw = dat_rf %>% dplyr::select(lagoslakeid) %>%
   group_by(lagoslakeid) %>% mutate(m = n()) %>% 
   ungroup() %>% 
   mutate(cw = sqrt(max(m)/m))
@@ -154,8 +165,8 @@ ggplot(dat_rf, aes(x = Chloride, y = pred, color = log(maxdepth))) +
 ggsave('LAGOS_prediction/Figure_modelCor.png',width = 7,height = 5)
 
 
-#calculating predictions for all lagos
-###all lagos data for later predictions
+
+### Load LAGOS data ####
 allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
   mutate(month = 8) %>% 
   filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
@@ -170,28 +181,28 @@ lagos_pred_Aug <- predict(rf_model, data = allLagos.rf)
 allLagos$predictionAug = lagos_pred_Aug$predictions
 # write_csv(alllagos_preds_Aug,'output_data_allLagosPredictions.csv')
 
-#####
-
+#### Create Mean Chloride DF ####
 dat_rf.sum = dat_rf %>% dplyr::mutate(predicted = as.numeric(pred)) %>% 
   group_by(lagoslakeid) %>% 
-  summarise(meanCl = mean(Chloride), min = min(Chloride), max = max(Chloride), 
+  summarise(meanCl = mean(Chloride), min = min(Chloride), max = max(Chloride), medianCl = median(Chloride),
             pred = mean(predicted), lakeconn = first(lakeconnection), lat = first(nhd_lat), long = first(nhd_long), count = n()) %>%
   arrange(meanCl) %>% mutate(id = as.numeric(rownames(.))) %>% 
   mutate(residuals = pred-meanCl) 
 
 ggplot(dat_rf.sum, aes(x = id, y = meanCl, color = log(count))) + geom_point(alpha = 0.6) +
-  geom_point(aes(y = pred), color = 'red3', alpha = 0.6) +
+  geom_point(aes(y = pred), color = 'red3', alpha = 0.6, size = 0.8) +
   geom_linerange(aes(ymin = min, ymax = max), alpha = 0.6) +
   ylab('Range observed Chloride concentrations')
 
 library(lme4)
 fitsO <- lm(pred ~ meanCl, data=dat_rf.sum) 
+summary(fitsO)
 fitsO = data.frame(r2 = paste0('r2 = ',round(summary(fitsO)$r.squared,2)),
                    meanCl = 7,
                    pred = 0.1)
 
-fits <- lme4::lmList(pred ~ meanCl | lakeconn, data=dat_rf.sum) 
-fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits)$r.squared,2)), lakeconn = unique(fits@groups), 
+fits1 <- lme4::lmList(pred ~ meanCl | lakeconn, data=dat_rf.sum) 
+fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits1)$r.squared,2)), lakeconn = unique(fits1@groups), 
                    meanCl = 7,
                    pred = 0.1)
 
@@ -244,7 +255,33 @@ ggsave(plot = p2,'LAGOS_prediction/Figure_modelCorMean_LakeType.png',width = 6,h
 ############# ############# ############# ############# ############# ############# 
 ## Prediction for LAGOS ####
 
-# Plot prediction histogram 
+# Compare LAGOS predictions to lakes in model 
+dupLakes = allLagos %>% filter(lagoslakeid %in% dat_rf.sum$lagoslakeid) %>% 
+  dplyr::select(lagoslakeid, predictionAug)
+meanLakes_Lagos = dat_rf.sum %>% left_join(dupLakes) %>% 
+  mutate(diffDup = predictionAug - pred) %>% 
+  arrange(lagoslakeid)
+
+fits2 <- lm(predictionAug ~ meanCl, data=meanLakes_Lagos) 
+fits2 = data.frame(r2 = paste0('r2 = ',round(summary(fits2)$r.squared,2)),
+                   meanCl = 7,
+                   predictionAug = 0.1)
+
+ggplot(meanLakes_Lagos,aes(x = exp(meanCl),y = exp(predictionAug))) + geom_point() +
+  ylab(bquote('LAGOS Predicted August Chloride'~(mg~L^-1))) + xlab(bquote('Observed Mean Chloride'~(mg~L^-1))) +
+  # labs(title = paste0('Modeled chloride (n = ',nrow(dat_rf),')')) +
+  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  geom_abline(linetype = 'dashed') +
+  geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
+  theme_bw()
+
+lakes100 = allLagos %>% dplyr::filter(exp(predictionAug) >= 100) %>% 
+  dplyr::select(lagoslakeid:maxdepth, predictionAug)
+lakes50 = allLagos %>% dplyr::filter(exp(predictionAug) >= 50) %>% 
+  dplyr::select(lagoslakeid:maxdepth, predictionAug)
+dplyr::rename(count(allLagos, state_zoneid,TonsPerMile), Freq = n)
+
+# Plot prediction histogram ####
 ggplot() + 
   geom_density(data = allLagos, aes(x = exp(predictionAug), fill = "r"), alpha = 0.3) +
   geom_density(data = dat_rf.sum, aes(x = exp(meanCl), fill = "b"), alpha = 0.3) +
@@ -262,6 +299,8 @@ ggsave('LAGOS_prediction/Figure_LAGOSpredictions.png',width = 7,height = 5)
 ############# ############# ############# ############# ############# ############# 
 ############# plotting residuals over space #############
 library(tigris)
+library(mapview)
+library(viridisLite)
 states <- states(cb = TRUE)
 states_sf<- st_as_sf(states)
 
@@ -276,7 +315,7 @@ ggplot(data=dat_rf.sum) +
 # ggsave(filename = 'LAGOS_prediction/Figure_RF_modelResiduals.png',width = 7, height = 5)
 
 
-b = allLagos %>% select(lagoslakeid:lakeconnection,predictionAug) %>% 
+b = allLagos %>% dplyr::select(lagoslakeid:lakeconnection,predictionAug) %>% 
   filter(predictionAug > log(50)) %>% 
   mutate(cols = 
            case_when(exp(predictionAug) < 100 ~ 1,
@@ -284,8 +323,7 @@ b = allLagos %>% select(lagoslakeid:lakeconnection,predictionAug) %>%
                      exp(predictionAug) > 260 ~ 3)) %>% 
   mutate(expCl = exp(predictionAug)) %>% 
   st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
-library(mapview)
-library(viridisLite)
+
 m = b %>% mapview(zcol = "expCl", layer.name = 'Predicted Chloride (mg/L)')
 m
 mapshot(m, url = paste0(getwd(), "/html/map.html"))
