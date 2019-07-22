@@ -119,11 +119,31 @@ random_lake_samps <- lapply(1:ntree, function(i){
 )
 
   
-rf_model<-ranger(dependent.variable.name='Chloride',data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
+rf_model<-ranger(dependent.variable.name='Chloride',
+                 data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
                  inbag=random_lake_samps,
-                 num.trees=ntree, importance = "permutation", keep.inbag = T, 
-                 mtry=6)
+                 num.trees=ntree, quantreg = T
+                # ,keep.inbag = TRUE #something seems to be wrong when this is included
+                #it's supposed to allow you to "prepare out-of-bag quantile prediction."
+                #maybe it just takes a long ass time?
+                 )
 rf_model
+
+
+# preds<-predict(rf_model, data=rf_cov,predict.all = T )
+# 
+# plot(testpredictions, dat_rf$Chloride)
+# 
+# testpredictions<-c()
+# for (i in 1:nrow(test$predictions)){
+# pred<-mean(preds$predictions[i,as.logical(sapply(random_lake_samps, function(x) x[i]))])
+# 
+# testpredictions[i]<-pred
+# }
+# 
+# plot(rf_model$predictions, testpredictions)
+# 
+# plot(preds$predictions, rf_model$predictions)
 
 
 #variable importance
@@ -179,6 +199,10 @@ sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
 allLagos.rf <- allLagos %>% dplyr::select(colnames(rf_cov))
 lagos_pred_Aug <- predict(rf_model, data = allLagos.rf)
 allLagos$predictionAug = lagos_pred_Aug$predictions
+
+quantiles = c(0.05, 0.95)
+lagos_pred_Aug_PI <- predict(rf_model, data = allLagos.rf,type="quantiles", quantiles=quantiles)
+
 # write_csv(alllagos_preds_Aug,'output_data_allLagosPredictions.csv')
 
 #### Create Mean Chloride DF ####
