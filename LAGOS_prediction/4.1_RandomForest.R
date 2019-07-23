@@ -123,11 +123,30 @@ rf_model<-ranger(dependent.variable.name='Chloride',
                  data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
                  inbag=random_lake_samps,
                  num.trees=ntree, quantreg = T
-                # ,keep.inbag = TRUE #something seems to be wrong when this is included
-                #it's supposed to allow you to "prepare out-of-bag quantile prediction."
-                #maybe it just takes a long ass time?
+                 ,keep.inbag = TRUE 
                  )
 rf_model
+
+
+quantiles = c(0.05,0.95)
+oob_quantiles<-predict(rf_model,  type = 'quantiles',quantiles=quantiles )
+
+
+ggplot() + 
+  geom_point( aes(y=rf_model$predictions[order(rf_model$predictions)], 
+                  x=1:length(rf_model$predictions)), 
+              color="red") +
+  geom_errorbar(aes(ymin=oob_quantiles$predictions[order(rf_model$predictions),1],
+                    ymax=oob_quantiles$predictions[order(rf_model$predictions),2], 
+                    x=1:length(rf_model$predictions)), alpha=.01)
+
+
+length(rf_model$predictions[rf_model$predictions<oob_quantiles$predictions[,1]])
+
+length(rf_model$predictions[rf_model$predictions>oob_quantiles$predictions[,2]])
+
+
+(1039+320)/length(dat_rf$Chloride)
 
 
 # preds<-predict(rf_model, data=rf_cov,predict.all = T )
