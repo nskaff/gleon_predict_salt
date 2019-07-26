@@ -58,10 +58,6 @@ dev.off()
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
 
 ## Random Forest model 
-rf_cov <- dat_rf %>% dplyr::select(month,lake_area_ha,iws_ha,
-                                   iws_nlcd2011_pct_0:iws_roaddensity_density_mperha,
-                                   buffer500m_nlcd2011_pct_0:TonsPerMile)
-sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 
 
 # rf_cov <- dat_rf[,names(dat_rf) %in% tail(DF$w,10)]
@@ -71,6 +67,24 @@ cw = dat_rf %>% dplyr::select(lagoslakeid) %>%
   ungroup() %>% 
   mutate(cw = sqrt(max(m)/m))
 dat_rf$cw = round(cw$cw,0)
+
+
+unique_lakes<-unique(dat_rf$lagoslakeid)
+set.seed(20)
+train_lakes<-sample(unique_lakes, .5*length(unique_lakes))
+
+dat_rf_train<-dat_rf[dat_rf$lagoslakeid %in% train_lakes,]
+dat_rf_test<-dat_rf[!(dat_rf$lagoslakeid %in% train_lakes),]
+
+rf_cov_train <- dat_rf_train %>% dplyr::select(month,lake_area_ha,iws_ha,
+                                   iws_nlcd2011_pct_0:iws_roaddensity_density_mperha,
+                                   buffer500m_nlcd2011_pct_0:TonsPerMile)
+sapply(rf_cov_train, function(x) sum(is.na(x))) # See if there are NA values
+
+rf_cov_test <- dat_rf_test %>% dplyr::select(month,lake_area_ha,iws_ha,
+                                               iws_nlcd2011_pct_0:iws_roaddensity_density_mperha,
+                                               buffer500m_nlcd2011_pct_0:TonsPerMile)
+
 ##ranger version of random forest
 #generating a matrix of in-bag and out of bag observations
 ntree = 1000
@@ -93,21 +107,20 @@ random_lake_samps <- lapply(1:ntree, function(i){
   # lake_samp = dat_rf$lagoslakeid %in% sample(unique_lakes, size =.95*length(unique_lakes), replace=F)
   # samp = dat_rf %>% mutate(use = ifelse(lake_samp == TRUE,cw,0)) %>%
   #   pull(use)
-
+unique_lakes<-unique(dat_rf_train$lagoslakeid)
   # # Only 1s and 0s
-  unique_lakes<-unique(dat_rf$lagoslakeid)
   lake_samp <- sample(unique_lakes, size =.9*length(unique_lakes), replace=F)
-  samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
+  samp = as.integer(dat_rf_train$lagoslakeid %in% lake_samp)
 
   ## Nick's original code
   # #take a full bootstrap sample of the in-sample lakes. Leaving this with replace F but can be adjusted later
-  # expand_samp<-sample(as.numeric(row.names(dat_rf))[dat_rf$lagoslakeid %in% lake_samp ], replace=F )
+  # expand_samp<-sample(as.numeric(row.names(dat_rf_train))[dat_rf_train$lagoslakeid %in% lake_samp ], replace=F )
   # 
   # #counting the number of bootstrap samples for each observation
   # samp_count<-plyr::count(expand_samp)
   # 
   # #joining the in-bag sample with the out of bag sample index
-  # df<-full_join(samp_count, data.frame(x=as.numeric(row.names(dat_rf))[!(row.names(dat_rf) %in% samp_count$x)]), by="x")
+  # df<-full_join(samp_count, data.frame(x=as.numeric(row.names(dat_rf_train))[!(row.names(dat_rf_train) %in% samp_count$x)]), by="x")
   # 
   # #ordering by row number
   # samp<-as.numeric(df[order(as.numeric(df$x)),"freq"])
@@ -120,7 +133,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 
   
 rf_model<-ranger(dependent.variable.name='Chloride',
-                 data=data.frame(Chloride=dat_rf$Chloride,rf_cov),
+                 data=data.frame(Chloride=dat_rf_train$Chloride,rf_cov_train),
                  inbag=random_lake_samps,
                  num.trees=ntree, quantreg = T
                  ,keep.inbag = TRUE 
@@ -130,6 +143,38 @@ rf_model
 
 quantiles = c(0.05,0.95)
 oob_quantiles<-predict(rf_model,  type = 'quantiles',quantiles=quantiles )
+
+test_preds<-predict(rf_model, data=dat_rf_test)
+
+test_preds_quant<-predict(rf_model, data=dat_rf_test, quantiles = c(.05, .5, .95),type = "quantiles")
+
+r2_train<-cor(rf_model$predictions,dat_rf_train$Chloride )^2
+plot(rf_model$predictions,dat_rf_train$Chloride)
+
+r2_test<-cor(test_preds$predictions,dat_rf_test$Chloride )^2
+plot(test_preds$predictions,dat_rf_test$Chloride )
+
+r2_test_quant<-cor(test_preds_quant$predictions[,2],dat_rf_test$Chloride )^2
+plot(test_preds_quant$predictions[,2],dat_rf_test$Chloride )
+
+plot(test_preds_quant$predictions[,2], test_preds$predictions)
+
+
+length(test_preds$predictions[test_preds$predictions<test_preds_quant$predictions[,1]])
+
+length(test_preds$predictions[test_preds$predictions>test_preds_quant$predictions[,3]])
+
+
+
+
+
+ggplot() + 
+  geom_point( aes(y=test_preds$predictions[order(test_preds$predictions)], 
+                  x=1:length(test_preds$predictions)), 
+              color="red") +
+  geom_errorbar(aes(ymin=test_preds_quant$predictions[order(test_preds$predictions),1],
+                    ymax=test_preds_quant$predictions[order(test_preds$predictions),3], 
+                    x=1:length(test_preds$predictions)), alpha=.01)
 
 
 ggplot() + 
@@ -146,7 +191,7 @@ length(rf_model$predictions[rf_model$predictions<oob_quantiles$predictions[,1]])
 length(rf_model$predictions[rf_model$predictions>oob_quantiles$predictions[,2]])
 
 
-(1039+320)/length(dat_rf$Chloride)
+(1013+366)/length(dat_rf_train$Chloride)
 
 
 # preds<-predict(rf_model, data=rf_cov,predict.all = T )
