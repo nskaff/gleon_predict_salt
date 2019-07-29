@@ -39,12 +39,13 @@ wioverlap = wilakes %>% st_join(nhd1, left=F) %>%
   dplyr::select(lagoslakeid = lagoslakei, GNIS_Name,name:chloride,group)
 st_geometry(wioverlap) = NULL
 
-predictionsWI = wioverlap %>% left_join(allLagos) %>% 
-  mutate(newcl = exp(predictionAug)) %>%
-  mutate(cldiff = abs(newcl - chloride)) %>% 
+predictionsWI = wioverlap %>% left_join(allLagos.out) %>% 
+  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  # mutate(cldiff = abs(newcl - chloride)) %>% 
   filter(!lagoslakeid %in% dat$lagoslakeid)  # which haven't been used in the model 
 
-ggplot(predictionsWI, aes(x = chloride, y = newcl, color = group)) + geom_point() + 
+ggplot(predictionsWI) + geom_point(aes(x = chloride, y = pred.Mean), color = 'red3') +
+  geom_point(aes(x = chloride, y = pred.Median), color = 'navy') +
   geom_abline(intercept = 0, slope = 1) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted WI chloride') +
@@ -72,16 +73,19 @@ rioverlap = clmean %>% st_join(nhd1, left=TRUE) %>%
   dplyr::select(lagoslakeid = lagoslakei, Zmax__m_,GNIS_Name,code:chloride)
 st_geometry(rioverlap) = NULL
 
-predictionsRI = rioverlap %>% left_join(allLagos) %>% 
-  mutate(newcl = exp(predictionAug)) %>%
-  mutate(cldiff = abs(newcl - chloride)) %>% 
+predictionsRI = rioverlap %>% left_join(allLagos.out) %>% 
+  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  # mutate(cldiff = abs(newcl - chloride)) %>% 
   filter(!lagoslakeid %in% modeledLakes) # which haven't been used in the model 
 
 b = predictionsRI %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), newcl = first(newcl), depth = mean(Zmax__m_))
+  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), 
+            pred.Mean = first(pred.Mean), pred.Median = first(pred.Median), depth = mean(Zmax__m_))
 
-ggplot(b, aes(x = mean, y = newcl), alpha = 0.7) + geom_point(aes(color = depth)) +
-  geom_errorbarh(aes(xmax = min, xmin = max), color = 'black',alpha = 0.6) +
+ggplot(b, alpha = 0.7) + 
+  geom_point(aes(x = mean, y = pred.Mean), color = 'red3') +
+  geom_point(aes(x = mean, y = pred.Median), color = 'navy') +
+  geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.6) +
   geom_abline(intercept = 0, slope = 1) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted RI chloride') +
@@ -121,39 +125,24 @@ mnlakes =  mnin %>%
 mnoverlapALL = mnlakes %>% st_join(nhd1, left=TRUE) %>%
   dplyr::select(lagoslakeid = lagoslakei,Lake_Area_,Y_COORD,X_COORD,SYS_LOC_CODE,LOC_DESC,cl,SAMPLE_DATE) #%>%
 
-mnoverlapALL_pred = mnoverlapALL %>% dplyr::left_join(allLagos) %>% 
-  mutate(newcl = exp(predictionAug)) %>%
-  mutate(cldiff = abs(newcl - cl)) %>% 
-  mutate(clerror = abs(newcl - cl)/(newcl+cl)) %>% 
-  mutate(month = month(SAMPLE_DATE)) %>% 
-  filter(!is.na(newcl)) %>% 
-  filter(month == 8)
+mnoverlapALL_pred = mnoverlapALL %>% dplyr::left_join(allLagos.out) %>% 
+  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  # mutate(month = month(SAMPLE_DATE)) %>% 
+  filter(!is.na(pred.Mean))  
+  # filter(month == 8)
 
 predictionsMN = mnoverlapALL_pred %>% filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 st_geometry(predictionsMN) = NULL
 
-b = mnoverlapALL_pred %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(cl), max = max(cl), mean = mean(cl), newcl = first(newcl))
+b = predictionsMN %>% group_by(lagoslakeid) %>% 
+  summarise(min = min(cl), max = max(cl), mean = mean(cl), pred.Mean = first(pred.Mean), pred.Median = first(pred.Median))
 
 library(ggrepel)
-ggplot(mnoverlapALL_pred, aes(x = cl, y = newcl), alpha = 0.7) + 
-  geom_point() + 
-  geom_point(data = predictionsMN,aes(x = cl, y = newcl), color = 'red3', size = 2, alpha = 0.6) +
-  geom_abline(intercept = 0, slope = 1) +
-  ylab('Predicted Chloride (mg/L)') + xlab('Observed Chloride (mg/L)') +
-  labs(title = 'Predicted MN chloride') +
-  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) #+
-  # geom_label_repel(aes(label = ifelse(clerror > 0.6,gnis_name,'')),
-  #                  box.padding   = 0.35, 
-  #                  point.padding = 0.5,
-  #                  segment.color = 'grey50') 
-# ggsave(filename = 'LAGOS_data_Austin/Figure_predictions_MN_labels.png',width = 6, height = 4, units = 'in')
 
-
-ggplot(b, aes(x = mean, y = newcl), alpha = 0.7) + geom_point() +
-  geom_errorbarh(aes(xmax = min, xmin = max), color = 'black',alpha = 0.6) +
+ggplot(b, alpha = 0.7) + geom_point(aes(x = mean, y = pred.Mean), color = 'red3', size = 2, alpha = 0.7) +
+  geom_point(aes(x = mean, y = pred.Median), color = 'navy', size = 2, alpha = 0.7) +
+  geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.3) +
   geom_abline(intercept = 0, slope = 1) +
-  geom_point(data = predictionsMN,aes(x = cl, y = newcl), color = 'red3', size = 2, alpha = 0.6) +
   ylab('Predicted Chloride (mg/L)') + xlab('Observed Chloride (mg/L)') +
   labs(title = 'Predicted MN chloride') +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) #+
@@ -173,16 +162,54 @@ ggplot(b, aes(x = mean, y = newcl), alpha = 0.7) + geom_point() +
 
 ############# ############# ############# ############# ############# ############# 
 ############# Compare to all field data ############# 
-allPredictions = predictionsWI %>% mutate(State = 'Wisconsin') %>% dplyr::select(lagoslakeid,State, chloride, newcl) %>% 
-  bind_rows(predictionsRI %>% mutate(State = 'Rhode Island') %>% dplyr::select(lagoslakeid,State, chloride, newcl)) %>% 
-  bind_rows(predictionsMN %>% mutate(State = 'Minnesota') %>% dplyr::select(lagoslakeid,State, chloride = cl, newcl))
+allPredictions = predictionsWI %>% mutate(State = 'Wisconsin') %>% dplyr::select(lagoslakeid,State, chloride, pred.Mean, pred.Median) %>% 
+  bind_rows(predictionsRI %>% mutate(State = 'Rhode Island') %>% dplyr::select(lagoslakeid,State, chloride, pred.Mean, pred.Median)) %>% 
+  bind_rows(predictionsMN %>% mutate(State = 'Minnesota') %>% dplyr::select(lagoslakeid,State, chloride = cl, pred.Mean, pred.Median)) %>% 
+  # mutate(pred.Median = exp(pred.Median), pred.Mean = exp(pred.Median)) %>% 
+  filter(!is.na(pred.Median)) %>% filter(!is.na(chloride))
 
-ggplot(allPredictions, aes(x = chloride, y = newcl, fill = State)) + geom_point(shape = 21,alpha = 0.9) + 
+allPredictions.mean = allPredictions %>% group_by(lagoslakeid) %>% 
+  summarise(chloride.mean = mean(chloride), pred.Mean = mean(pred.Mean), pred.Median = mean(pred.Median),State = first(State))
+summary(lm(pred.Mean ~ chloride.mean, data = allPredictions.mean)) # r2 = 0.48
+summary(lm(pred.Median ~ chloride.mean, data = allPredictions.mean)) # r2 = 0.50
+
+p1 = ggplot(allPredictions) + geom_point(aes(x = chloride, y = pred.Mean, fill = State),shape = 21,alpha = 0.9) +   scale_fill_viridis_d() +
   geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted chloride concentrations') +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   theme_bw() +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
+p2 = ggplot(allPredictions) + 
+  geom_point(aes(x = chloride, y = pred.Median, fill = State),shape = 22,alpha = 0.9) +
+  scale_fill_viridis_d() +
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+  labs(title = 'Predicted chloride concentrations') +
+  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  theme_bw() +
+  scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
+plot_grid(p1, p2, labels = c('A: mean', 'B: median'), label_size = 10, nrow = 2, align = 'hv')
 ggsave(filename = 'LAGOS_prediction/Figure_predictions_WIMNRI.png',width = 7, height = 5, units = 'in')
+
+p1 = ggplot(allPredictions.mean, aes(x = chloride.mean, y = pred.Mean, fill = State)) + 
+  geom_point(shape = 21,alpha = 0.9) + 
+  scale_fill_viridis_d() +
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+  labs(title = 'Predicted chloride concentrations') +
+  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  theme_bw() +
+  scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
+p2 = ggplot(allPredictions.mean, aes(x = chloride.mean, y = pred.Median, fill = State)) + 
+  geom_point(shape = 22,alpha = 0.9) + 
+  scale_fill_viridis_d() +
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+  labs(title = 'Predicted chloride concentrations') +
+  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  theme_bw() +
+  scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
+plot_grid(p1, p2, labels = c('A: mean', 'B: median'), label_size = 10, nrow = 2, align = 'hv')
+ggsave(filename = 'LAGOS_prediction/Figure_predictions_WIMNRI_mean.png',width = 7, height = 5, units = 'in')
 

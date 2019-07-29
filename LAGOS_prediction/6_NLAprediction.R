@@ -28,32 +28,43 @@ nla.overlap = nla %>% st_join(nhd1, left=F) %>%
   dplyr::select(lagoslakeid = lagoslakei, SITE_ID, GNIS_Name,state:clflag)
 st_geometry(nla.overlap) = NULL
 
-predictionsNLA = nla.overlap %>% left_join(allLagos) %>% 
-  mutate(newcl = exp(predictionAug)) %>%
-  mutate(cldiff = abs(newcl - cl)) %>% 
+predictionsNLA = nla.overlap %>% left_join(allLagos.out) %>% 
+  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  # mutate(cldiff = abs(newcl - cl)) %>% 
   filter(!lagoslakeid %in% dat$lagoslakeid)  %>%  # which haven't been used in the model 
-  select(lagoslakeid:nhd_long,predictionAug:cldiff) %>% 
+  select(lagoslakeid:nhd_long,predictionAug:prediction.95,pred.Mean,pred.Median) %>% 
   group_by(lagoslakeid) %>% 
-  dplyr::summarise_at(vars(cl,predictionAug,newcl,cldiff,nhd_lat,nhd_long), mean, na.rm=T) %>% 
-  dplyr::left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) %>% 
+  dplyr::summarise_at(vars(cl,predictionAug:prediction.95,pred.Mean,pred.Median,nhd_lat,nhd_long), mean, na.rm=T) %>% 
+  left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) %>% 
   filter(!lagoslakeid %in% dat_rf$lagoslakeid) # None of the lakes are duplicated
 
 
-fitsO <- lm(predictionAug ~ log(cl), data = predictionsNLA) 
+fitsO <- lm(predictionAug2 ~ log(cl), data = predictionsNLA); summary(fitsO) #r2 = 0.8
+fitsO <- lm(prediction.50 ~ log(cl), data = predictionsNLA); summary(fitsO) #r2 = 0.81
+
 fitsO = data.frame(r2 = paste0('r2 = ',round(summary(fitsO)$r.squared,2)),
                    cl = 0.1,
-                   newcl = 100)
+                   prediction.50 = 100)
 
-predictionsNLA = predictionsNLA %>% mutate(train = ifelse(state %in% c('MN','WI','NY','VT','MI'),TRUE, FALSE))
+# predictionsNLA = predictionsNLA %>% mutate(train = ifelse(state %in% c('MN','WI','NY','VT','MI'),TRUE, FALSE))
   
-ggplot(predictionsNLA, aes(x = cl, y = newcl)) + geom_point(aes(color = nhd_lat), shape = 16) + 
-  geom_abline(intercept = 0, slope = 1) +
+ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  geom_point(aes(fill = nhd_lat), shape = 21) + 
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted NLA chloride') +
-  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
-  scale_colour_viridis_c(direction = -1) +
-  geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
+  scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100)) + 
+  scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100)) +
+  scale_fill_viridis_c(direction = -1) +
+  # geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
   theme_bw() 
 ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
  
+
+# Tichigan Lake
+# http://www.sewrpc.org/SEWRPCFiles/Publications/CAPR/capr-283_vol-01_waterford_impoundment.pdf
+# Observed: 127.153000	Predicted: 52.535753
+# In the surface waters of Tichigan Lake, chloride averaged about 69 mg/l in the
+# spring, 50 mg/l in summer, 42 mg/l in fall and winter (1973-2004)
+
 
