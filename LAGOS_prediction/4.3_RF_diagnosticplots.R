@@ -33,8 +33,8 @@ a = autoplot(prcomp(combo.pca, center = T, scale = T), data = combo, fill = 'gro
              loadings.colour = 'black',loadings.label.colour = 'black',
              loadings.label = TRUE, loadings.label.size = 4)
 
-a + scale_fill_manual(values = c("grey80","red2",'navy')) + 
-  scale_color_manual(values = c("grey80","red2",'navy')) + 
+a + scale_fill_manual(values = c("grey80","red4",'navy')) + 
+  scale_color_manual(values = c("grey80","red4",'navy')) + 
   scale_alpha_manual(values = 0.5) +
   theme_bw()
 ggsave('LAGOS_prediction/Figure_PCA.png',width = 7,height = 5)
@@ -99,6 +99,12 @@ ggplot(long_all, aes(x = attribute, y = value, col = group)) + geom_boxplot(outl
   ylim(-2,4) +
   coord_cartesian()
 
+# 3) Month of Observations ####
+head(getDat)
+ggplot(getDat) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'red4', alpha = 0.8) +
+  scale_x_continuous(breaks = 1:12) +
+  xlab('Month of Observation') + ylab('Count')
+ggsave(filename = 'LAGOS_prediction/Figure_observationsMonth.png',width = 4,height = 3)
 
 # 3) feature contributions for forestfloor ####
 source("ranger_RFadaptor.R")
