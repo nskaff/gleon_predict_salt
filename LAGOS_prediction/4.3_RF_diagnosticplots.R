@@ -273,3 +273,13 @@ m = b %>% mapview(zcol = "expCl", layer.name = 'Predicted Chloride (mg/L)')
 m
 mapshot(m, url = paste0(getwd(), "/html/map.html"))
 
+# 7) Outliers = Lake Calhoun, MN is a good example Bde Maka Ska ####
+
+a = dat %>% filter(lagoslakeid ==  1696)
+
+ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue)) +
+  geom_point(data = filter(a, ResultMeasureValue < 10),aes(x = ActivityStartDate, y = ResultMeasureValue), 
+             color = 'red', size = 3,pch = 17) +
+  xlab('Observation Date') + ylab(bquote('Mean Predicted Chloride'~(mg~L^-1))) +
+  labs(title = 'Bde Maka Ska, MN') +
+  theme_bw()

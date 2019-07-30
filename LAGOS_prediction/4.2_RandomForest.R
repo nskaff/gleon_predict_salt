@@ -122,7 +122,7 @@ rf_model
 ## Save the model
 # saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_07_29.rds")
 ## load the model
-# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_07_25.rds")
+# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_07_29.rds")
 
 quantiles = c(0.05,0.5,0.95)
 oob_quantiles <- predict(rf_model, type = 'quantiles', quantiles=quantiles)
@@ -324,7 +324,7 @@ ggplot(dat.out.mean, aes(x = id, y = meanCl, color = log(count))) + geom_point(a
 ############# ############# ############# ############# ############# ############# 
 ## Prediction for LAGOS ####
 # Compare LAGOS predictions to lakes in model 
-dupLakes = allLagos.out %>% filter(lagoslakeid %in% dat.out.mean$lagoslakeid)
+dupLakes = allLagos.out %>% filter(lagoslakeid %in% dat_rf$lagoslakeid)
 meanLakes_Lagos = dat.out.mean %>% left_join(dupLakes) %>% 
   mutate(diffDup = predictionAug2 - pred) %>% 
   arrange(lagoslakeid)
@@ -342,10 +342,16 @@ ggplot(meanLakes_Lagos,aes(x = exp(meanCl),y = exp(predictionAug2))) + geom_poin
   geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
   theme_bw()
 
+# Predictions ####
 lakes100 = allLagos.out %>% dplyr::filter(exp(predictionAug2) >= 100) %>% 
   dplyr::select(lagoslakeid:maxdepth, predictionAug)
 lakes50 = allLagos.out %>% dplyr::filter(exp(predictionAug2) >= 50) %>% 
   dplyr::select(lagoslakeid:maxdepth, predictionAug)
+
+summary(exp(allLagos.out %>% filter(!lagoslakeid %in% dat_rf$lagoslakeid) %>% select(prediction.50)))
+nrow(allLagos.out %>% filter(!lagoslakeid %in% dat_rf$lagoslakeid) %>% dplyr::filter(exp(predictionAug2) >= 230))
+nrow(dat.out.mean %>% dplyr::filter(exp(meanCl) >= 230))
+
 
 # Plot prediction histogram ####
 ggplot() + 
