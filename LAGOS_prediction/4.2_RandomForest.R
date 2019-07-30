@@ -282,7 +282,8 @@ allLagos.out = allLagos %>%
   dplyr::select(lagoslakeid:maxdepth,predictionAug:prediction.95) %>% 
   mutate(PIrange = prediction.95-prediction.05) %>% 
   mutate(obsLakes = ifelse(lagoslakeid %in% dat_rf$lagoslakeid,TRUE,FALSE))
-write_csv(allLagos.out,'LAGOS_prediction/output_data_allLagosPredictions.csv')
+# write_csv(allLagos.out,'LAGOS_prediction/output_data_allLagosPredictions.csv')
+allLagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions.csv')
 
 ggplot(data = allLagos.out) + 
   geom_errorbar(aes(ymin=prediction.05[order(predictionAug2)],
@@ -350,10 +351,11 @@ lakes50 = allLagos.out %>% dplyr::filter(exp(predictionAug2) >= 50) %>%
 ggplot() + 
   geom_density(data = allLagos.out, aes(x = exp(prediction.05)), fill = "transparent", linetype = 'dashed', alpha = 0.3) +
   geom_density(data = allLagos.out, aes(x = exp(prediction.95)), fill = "transparent", linetype = 'dashed', alpha = 0.3) +
-  geom_density(data = allLagos.out, aes(x = exp(predictionAug2), fill = "n"), alpha = 0.3) +
+  geom_density(data = allLagos.out, aes(x = exp(predictionAug2), fill = "r"), alpha = 0.3) +
+  geom_density(data = allLagos.out, aes(x = exp(prediction.50), fill = "n"), alpha = 0.3) +
   # geom_density(data = dat.out.mean, aes(x = exp(meanCl), fill = "b"), alpha = 0.3) +
   # scale_colour_manual(name ="", values = c("r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted")) +
-  scale_fill_manual(name ="", values = c('n' = 'navy',"r" = "red", "b" = "blue"), labels=c("b" = "Observed", "r" = "Predicted"))  + 
+  scale_fill_manual(name ="", values = c('n' = 'navy',"r" = "red", "b" = "blue"), labels=c("n" = "Median", "r" = "Mean"))  + 
   scale_x_continuous(trans='log10') +
   ylab('Density') + xlab(bquote('Chloride'~(mg~L^-1))) +
   ggtitle("Predicted Chloride Concentrations in Lagos") +
