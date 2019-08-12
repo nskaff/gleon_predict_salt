@@ -18,7 +18,8 @@ library(cowplot)
 
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
-
+colNames = read_csv('LAGOS_prediction/ColNames.csv')
+names(datin) = colNames$NewName
 ## Tidy data
 # total data (80k, after 1990 69k, after taking mean of measurements from same day 35k, filter out deep measurements 35k)
 
@@ -36,10 +37,10 @@ dat = data.frame(dat)
 # Function to take log of columsn 
 log01 <- function(x){log(x + 0.001)} # log of columns 
 dat_rf <- dat %>%
-  mutate_at(vars(Chloride,lake_area_ha,iws_ha,wlconnections_allwetlands_count:rdDist_Roads),log01) %>%
-  mutate(month = month(ActivityStartDate)) %>%
-  filter(!is.na(iws_nlcd2011_pct_22)) %>% 
-  filter(!is.na(TonsPerMile)) %>% 
+  mutate_at(vars(Chloride,LakeArea,WS.Area,wlconnections_allwetlands_count:RoadDistance),log01) %>%
+  mutate(Month = month(ActivityStartDate)) %>%
+  filter(!is.na(WS.Dev.Low)) %>% 
+  filter(!is.na(TonsPerMile)) %>%
   mutate(id=row_number())
 
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
@@ -49,9 +50,9 @@ sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
 #                                    iws_nlcd2011_pct_0:iws_roaddensity_density_mperha,
 #                                    buffer500m_nlcd2011_pct_0:TonsPerMile)
 ## Random Forest covariance matrix ####
-rf_cov <- dat_rf %>% dplyr::select(month,lake_area_ha,iws_ha,winterseverity,
-                                   iws_nlcd2011_pct_11:iws_nlcd2011_pct_95,iws_roaddensity_density_mperha,
-                                   coastdist,rdDist_Interstate:rdDist_Roads)
+rf_cov <- dat_rf %>% dplyr::select(Month,LakeArea,WS.Area,WinterSeverity,
+                                   WS.IceSnow:WS.EmergentWetlands,WS.RoadDensity,
+                                   CoastalDistance,InterstateDistance:RoadDistance)
 sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 
 
@@ -65,7 +66,7 @@ sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 # dat_rf$cw = round(cw$cw,0)
 ##ranger version of random forest
 #generating a matrix of in-bag and out of bag observations
-ntree = 10000
+ntree = 1000
 
 random_lake_samps <- lapply(1:ntree, function(i){
   #print(i)
@@ -151,12 +152,12 @@ ggplot() +
               color="red4") +
   xlab('Observation ID') + ylab('Predicted Chloride w/ PI') +
   theme_bw()
-ggsave('LAGOS_prediction/Figure_PredictionsCI.png',width = 6,height = 4)
+ggsave('LAGOS_prediction/Figure_PredictionsCI2.png',width = 6,height = 4)
 
 
 length(rf_model$predictions[rf_model$predictions < oob_quantiles$predictions[,1]])
 length(rf_model$predictions[rf_model$predictions > oob_quantiles$predictions[,3]])
-(1139+127)/length(dat_rf$Chloride)
+(1139+2027)/length(dat_rf$Chloride)
 
 
 # preds<-predict(rf_model, data=rf_cov,predict.all = T )
@@ -185,13 +186,15 @@ ggplot(DF, aes(x=w, y=v,fill=v))+
   geom_bar(stat="identity", position="dodge") + coord_flip() +
   ylab("Variable Importance") + xlab("")+
   ggtitle("Information Value Summary")+
-  guides(fill=F)
+  guides(fill=F) +
+  theme_bw()
+
 ggsave('LAGOS_prediction/Figure_ValueSummary.png',width = 6,height = 6)
 
 
 #### Add predictions to dat df ####
 dat.out = dat_rf %>% 
-  dplyr::select(ActivityStartDate,lagoslakeid:maxdepth,lakeconnection,gnis_name:id) %>% 
+  dplyr::select(ActivityStartDate,lagoslakeid:MaxDepth,lakeconnection,gnis_name:id) %>% 
   dplyr::mutate(pred = rf_model$predictions) %>% 
   mutate(pred.05 = oob_quantiles$predictions[,1]) %>% 
   mutate(pred.50 = oob_quantiles$predictions[,2]) %>% 
@@ -203,35 +206,36 @@ dat.out = dat_rf %>%
 table(dat.out$within)
 
 
-# dat_rf$oob_preds_mean = oob_preds_mean
-p1 = ggplot(dat.out, aes(x = Chloride, y = pred.50, color = log(maxdepth))) + 
+
+p1 = ggplot(dat.out, aes(x = Chloride, y = pred.50, color = log(MaxDepth))) +
   geom_point(alpha = 0.6, shape = 16, size = 0.8) +
   ylim(-3.1,8) + xlim(-3.1,8) +
   xlab(bquote('Observed Chloride'~(mg~L^-1))) + ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
   geom_abline(linetype = 2) +
   labs(title = paste0('Median, Cor = ',round(cor(dat.out$pred.50, dat.out$Chloride, use = "complete.obs") ^ 2,2))) +
   scale_colour_viridis_c() +
-  theme_bw() 
-p2 =  ggplot(dat.out, aes(x = Chloride, y = pred, color = log(maxdepth))) + 
-  geom_point(alpha = 0.6, shape = 16, size = 0.8) +
-  ylim(-3.1,8) + xlim(-3.1,8) +
-  xlab(bquote('Observed Chloride'~(mg~L^-1))) + ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
-  geom_abline(linetype = 2) +
-  labs(title = paste0('Mean, Cor = ',round(cor(dat.out$pred, dat.out$Chloride, use = "complete.obs") ^ 2,2))) +
-  scale_colour_viridis_c() +
-  theme_bw() 
+  theme_bw()
+# p2 =  ggplot(dat.out, aes(x = Chloride, y = pred, color = log(MaxDepth))) +
+#   geom_point(alpha = 0.6, shape = 16, size = 0.8) +
+#   ylim(-3.1,8) + xlim(-3.1,8) +
+#   xlab(bquote('Observed Chloride'~(mg~L^-1))) + ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
+#   geom_abline(linetype = 2) +
+#   labs(title = paste0('Mean, Cor = ',round(cor(dat.out$pred, dat.out$Chloride, use = "complete.obs") ^ 2,2))) +
+#   scale_colour_viridis_c() +
+#   theme_bw() 
 
-plot_grid(p1, p2, labels = c('A', 'B'), label_size = 10, nrow = 2)
-ggsave('LAGOS_prediction/Figure_modelCor.png',width = 7,height = 5)
+# plot_grid(p1, p2, labels = c('A', 'B'), label_size = 10, nrow = 2)
+ggsave(plot = p1,filename = 'LAGOS_prediction/Figure_modelCor.png',width = 6,height = 3)
 
 ### Load LAGOS data ####
 allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
-  mutate(month = 8) %>% 
   filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
+names(allLagos) = colNames$NewLagos
 
 allLagos <- allLagos %>%
-  mutate_at(vars(lake_area_ha,iws_ha,iws_nlcd2011_ha_0:rdDist_Roads),log01) %>%
-  filter(!is.na(iws_nlcd2011_pct_22))
+  mutate(Month = 8) %>% 
+  mutate_at(vars(LakeArea,WS.Area,wlconnections_allwetlands_count:RoadDistance),log01) %>%
+  filter(!is.na(WS.Dev.Low))
 
 sapply(allLagos, function(x) sum(is.na(x))) # See if there are NA values
 allLagos.rf <- allLagos %>% dplyr::select(colnames(rf_cov))
@@ -279,9 +283,11 @@ allLagos.out = allLagos %>%
   mutate(prediction.05 = lagos_pred_Aug_PI$predictions[,1]) %>% 
   mutate(prediction.50 = lagos_pred_Aug_PI$predictions[,2]) %>% 
   mutate(prediction.95 = lagos_pred_Aug_PI$predictions[,3]) %>% 
-  dplyr::select(lagoslakeid:maxdepth,predictionAug:prediction.95) %>% 
+  dplyr::select(lagoslakeid:MaxDepth,predictionAug:prediction.95) %>% 
   mutate(PIrange = prediction.95-prediction.05) %>% 
   mutate(obsLakes = ifelse(lagoslakeid %in% dat_rf$lagoslakeid,TRUE,FALSE))
+table(allLagos.out$obsLakes)
+
 # write_csv(allLagos.out,'LAGOS_prediction/output_data_allLagosPredictions.csv')
 allLagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions.csv')
 
@@ -388,3 +394,8 @@ ggplot() +
   annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.4, angle = 90)
 ############# ############# ############# ############# ############# ############# 
 
+
+
+
+
+               

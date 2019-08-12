@@ -106,15 +106,34 @@ ggplot(getDat) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'red4', alph
   xlab('Month of Observation') + ylab('Count')
 ggsave(filename = 'LAGOS_prediction/Figure_observationsMonth.png',width = 4,height = 3)
 
-# 3) feature contributions for forestfloor ####
+# 3) Feature contributions for forestfloor + variable importance ####
 source("ranger_RFadaptor.R")
-
-ff_rf_model<-ranger_RFadaptor(rf_model,dat_rf$Chloride)
+source("ranger_plot.forestFloor.HD.R")
+ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$Chloride)
 ffra = forestFloor(ff_rf_model,rf_cov,calc_np = TRUE)
 
-#color by most important feature
-Col = fcol(ffra ,1)
-plot(ffra, plot_seq=c(1,2,4,6,8),plot_GOF=F, limitY=F, col=Col,orderByImportance = T)
+#Color by most important feature
+Col = fcol(ffra,1)
+# plot(ffra, plot_seq=c(1,3,4,5,8), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
+pp = plot.forestFloor.HD(ffra,plot_seq=c(1,3,4,5,8,20))
+
+#variable importance
+v<-as.numeric(rf_model$variable.importance)
+w<-as.character(names(rf_model$variable.importance))
+DF<-data.frame(w=w,v=as.numeric(v)) %>% arrange(v)
+DF$w <- factor(DF$w, levels = DF$w)
+
+p1 = ggplot(DF, aes(x=w, y=v,fill=v))+
+  geom_bar(stat="identity", position="dodge") + coord_flip() +
+  ylab("Variable Importance") + xlab("")+
+  # ggtitle("Information Value Summary") +
+  theme_bw(base_size = 9) +
+  # theme(axis.text = element_text(size=8), axis.title=element_text(size=8)) +
+  guides(fill=F)
+
+rightside = do.call(plot_grid, c(pp, list(labels = c('B','C','D','E','F'), label_size = 10, nrow = 2, align = 'hv')))
+p17 = plot_grid(p1,rightside, labels = c('A',''), label_size = 10, ncol = 2, rel_widths = c(0.8,1))
+ggsave(plot = p17,filename = 'LAGOS_prediction/Figure_VariableImportance_FeaturePlots.png',width = 8,height = 5)
 
 
 # 3) ### Plots of mean predictions ####
@@ -130,16 +149,16 @@ fits2 = data.frame(r2 = paste0('r2 = ',round(summary(fits2)$r.squared,2)),
                    meanCl = 7,
                    pred.50 = 0.1)
 
-p1 = ggplot(dat.out.mean, aes(x = meanCl, y = pred, color = log(count))) + geom_point(alpha = 0.6) +
-  geom_point(aes(y = pred, color = log(count)),  alpha = 0.6) +
-  geom_errorbarh(aes(xmin = min, xmax = max), alpha = 0.6) +
-  xlab(bquote('Observed Chloride'~(mg~L^-1))) +
-  ylab(bquote('Mean Predicted Chloride'~(mg~L^-1))) +
-  xlim(-3,8) + ylim(-3,8) +
-  scale_color_viridis_c() +
-  geom_abline(linetype = 'dashed') +
-  theme_bw() +
-  geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') 
+# p1 = ggplot(dat.out.mean, aes(x = meanCl, y = pred, color = log(count))) + geom_point(alpha = 0.6) +
+#   geom_point(aes(y = pred, color = log(count)),  alpha = 0.6) +
+#   geom_errorbarh(aes(xmin = min, xmax = max), alpha = 0.6) +
+#   xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+#   ylab(bquote('Mean Predicted Chloride'~(mg~L^-1))) +
+#   xlim(-3,8) + ylim(-3,8) +
+#   scale_color_viridis_c() +
+#   geom_abline(linetype = 'dashed') +
+#   theme_bw() +
+#   geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') 
 
 p2 = ggplot(dat.out.mean, aes(x = meanCl, y = pred.50, color = log(count))) + geom_point(alpha = 0.6) +
   geom_point(aes(y = pred, color = log(count)),  alpha = 0.6) +
@@ -152,8 +171,8 @@ p2 = ggplot(dat.out.mean, aes(x = meanCl, y = pred.50, color = log(count))) + ge
   theme_bw() +
   geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') 
 
-plot_grid(p1, p2, labels = c('A: mean', 'B: median'), label_size = 10, nrow = 2, align = 'hv')
-ggsave('LAGOS_prediction/Figure_modelCorMean_Range.png',width = 7,height = 7)
+# plot_grid(p1, p2, labels = c('A: mean', 'B: median'), label_size = 10, nrow = 2, align = 'hv')
+ggsave(plot = p2, filename = 'LAGOS_prediction/Figure_modelCorMean_Range.png',width = 7,height = 3.5)
 
 
 ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
@@ -166,25 +185,25 @@ ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 5)
 
 
 # Mean correlation
-p1 = ggplot(dat.out.mean, aes(x = exp(meanCl), y = exp(pred))) + geom_point() + geom_abline(linetype = 'dashed') +
-  ylab(bquote('Predicted Mean Chloride'~(mg~L^-1))) + xlab(bquote('Observed Mean Chloride'~(mg~L^-1))) +
-  labs(title = paste0('Mean, Modeled chloride (n = ',nrow(dat_rf),')')) +
-  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
-  geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
-  theme_bw() +
-  theme(legend.justification = c(0, 1), legend.position = c(0.02, 0.97),legend.box.background = element_rect(colour = "black")) +
-  scale_color_viridis_c(name = "% Forest")
-
+# p1 = ggplot(dat.out.mean, aes(x = exp(meanCl), y = exp(pred))) + geom_point() + geom_abline(linetype = 'dashed') +
+#   ylab(bquote('Predicted Mean Chloride'~(mg~L^-1))) + xlab(bquote('Observed Mean Chloride'~(mg~L^-1))) +
+#   labs(title = paste0('Mean, Modeled chloride (n = ',nrow(dat_rf),')')) +
+#   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+#   geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
+#   theme_bw() +
+#   theme(legend.justification = c(0, 1), legend.position = c(0.02, 0.97),legend.box.background = element_rect(colour = "black")) +
+#   scale_color_viridis_c(name = "% Forest")
+# 
 p2 = ggplot(dat.out.mean, aes(x = exp(meanCl), y = exp(pred.50))) + geom_point() + geom_abline(linetype = 'dashed') +
   ylab(bquote('Predicted Mean-Median Chloride'~(mg~L^-1))) + xlab(bquote('Observed Mean Chloride'~(mg~L^-1))) +
-  labs(title = paste0('Median, Modeled chloride (n = ',nrow(dat_rf),')')) +
+  labs(title = paste0('Mean modeled chloride (n = ',nrow(dat.out.mean),')')) +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
   theme_bw() +
   theme(legend.justification = c(0, 1), legend.position = c(0.02, 0.97),legend.box.background = element_rect(colour = "black")) +
   scale_color_viridis_c(name = "% Forest")
-plot_grid(p1, p2, labels = c('A', 'B'), label_size = 10, nrow = 2, align = 'hv')
-ggsave(plot = p1,'LAGOS_prediction/Figure_modelCorMean.png',width = 6,height = 5)
+# plot_grid(p1, p2, labels = c('A', 'B'), label_size = 10, nrow = 2, align = 'hv')
+ggsave(plot = p2,'LAGOS_prediction/Figure_modelCorMean.png',width = 6,height = 3.5)
 
 # Mean correlation by lake type
 fits1 <- lme4::lmList(pred.50 ~ meanCl | lakeconn, data=dat.out.mean) 
@@ -195,7 +214,7 @@ fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits1)$r.squared,2)), lakec
 ggplot(dat.out.mean, aes(x = exp(meanCl), y = exp(pred.50))) + geom_point() + geom_abline(linetype = 'dashed') +
   ylab(bquote('Predicted Median Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   facet_wrap(~lakeconn) +
-  labs(title = paste0('Modeled chloride (n =',nrow(dat_rf),')')) +
+  labs(title = paste0('Modeled chloride (n = ',nrow(dat.out.mean),')')) +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
   geom_text(data = fits1, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
   theme_bw() +
@@ -219,6 +238,12 @@ ggplot(PerWithin) + geom_bar(aes(x = group, y = perWithin), stat = 'identity') +
   ylab('Percent of lakes with all observations falling within 90% PI') +
   theme_bw()
 ggsave('LAGOS_prediction/Figure_LakesWithinPI.png',width = 6,height = 5)
+
+#############  Box and Whisker of ws values ############# 
+boxplot.df = dat %>% select(WS.IceSnow:WS.EmergentWetlands) %>% 
+  gather(parameter, value)
+ggplot(boxplot.df) + geom_boxplot(aes(parameter,value)) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 
 # 6) ## Mapping ####
