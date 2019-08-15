@@ -3,8 +3,8 @@ if (!exists('nhd1')) {
     nhd1 = st_read('~/Dropbox/currentprojects/SaltBayes/LAGOS_GIS/LAGOS_NE_All_Lakes_1ha/',stringsAsFactors = F)
   }
 modeledLakes = dat_rf$lagoslakeid
-############# ############# ############# ############# ############# ############# 
-############# Compare to Wisconsin field data ############# 
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+############# Wisconsin field data ############# 
 wi.1 = read_csv('~/Dropbox/currentprojects/RoadSalt/1998_2000_LandscapePosition/cl_data1998_2000.csv') %>% 
   dplyr::select(lat = latitude, long = longitude, name = lake, wbic = wbic, chloride = cl) %>% 
   mutate(group = 'wi.1')
@@ -46,7 +46,8 @@ predictionsWI = wioverlap %>% left_join(allLagos.out) %>%
 
 b.WI = predictionsWI %>% group_by(lagoslakeid) %>% 
   summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), 
-            pred.Mean = first(pred.Mean), pred.Median = first(pred.Median))
+            pred.Mean = first(pred.Mean), pred.Median = first(pred.Median)) %>% 
+  filter(!is.na(mean) & !is.na(pred.Median))
 
 ggplot(b.WI, alpha = 0.7) + 
   # geom_point(aes(x = mean, y = pred.Mean), color = 'red3') +
@@ -59,8 +60,8 @@ ggplot(b.WI, alpha = 0.7) +
   scale_colour_viridis_c(direction = -1)
 # ggsave(filename = 'LAGOS_data_Austin/Figure_predictions_WI.png',width = 6, height = 4, units = 'in')
 
-############# ############# ############# ############# ############# ############# 
-############# Compare to Rhode Island field data ############# 
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+############# Rhode Island field data ############# 
 lakes = read_csv('~/Dropbox/currentprojects/SaltBayes/RI_data/lakeLocations.csv') %>% 
   dplyr::select(lat = Lat, long = Lon, name = Site_Name, code = WB_code, Zmax__m_)
 
@@ -86,7 +87,8 @@ predictionsRI = rioverlap %>% left_join(allLagos.out) %>%
 
 b.RI = predictionsRI %>% group_by(lagoslakeid) %>% 
   summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), 
-            pred.Mean = first(pred.Mean), pred.Median = first(pred.Median), depth = mean(Zmax__m_))
+            pred.Mean = first(pred.Mean), pred.Median = first(pred.Median), depth = mean(Zmax__m_)) %>% 
+  filter(!is.na(mean) & !is.na(pred.Median))
 
 ggplot(b.RI, alpha = 0.7) + 
   # geom_point(aes(x = mean, y = pred.Mean), color = 'red3') +
@@ -114,8 +116,8 @@ ggplot(b.RI, alpha = 0.7) +
 # st_write(test,dsn = '~/Dropbox/currentprojects/SaltBayes/RI_data/GIS/rhodeislandCL.shp')
 
 
-############# ############# ############# ############# ############# ############# 
-############# Compare to Minnesota field data ############# 
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+############# Minnesota field data ############# 
 mnin = read_csv('~/Dropbox/currentprojects/SaltBayes/MN_results_MPCA/Chloride_Lakes_02202019.csv')
 
 mnlakes =  mnin %>%
@@ -141,7 +143,8 @@ predictionsMN = mnoverlapALL_pred %>% filter(!lagoslakeid %in% dat_rf$lagoslakei
 st_geometry(predictionsMN) = NULL
 
 b.MN = predictionsMN %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(cl), max = max(cl), mean = mean(cl), lakearea = mean(Lake_Area_), pred.Mean = first(pred.Mean), pred.Median = first(pred.Median))
+  summarise(min = min(cl), max = max(cl), mean = mean(cl), lakearea = mean(Lake_Area_), pred.Mean = first(pred.Mean), pred.Median = first(pred.Median)) %>% 
+  filter(!is.na(mean) & !is.na(pred.Median))
 
 library(ggrepel)
 
@@ -164,27 +167,102 @@ ggplot(b.MN, alpha = 0.7) + #geom_point(aes(x = mean, y = pred.Mean), color = 'r
 # test = dat %>% inner_join(predictions, by = 'lagoslakeid')
 # plot(test$Chloride,test$cl)
 
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
+############# NLA data ############# 
+nla07site = read_csv('~/Documents/nla2007_alldata/NLA2007_SampledLakeInformation_20091113.csv') %>% 
+  dplyr::select(SITE_ID, lat = LAT_DD, long = LON_DD, state = ST, name = NHDNAME)
+nla07data = read_csv('~/Documents/nla2007_alldata/NLA2007_WaterQuality_20091123.csv') %>% 
+  dplyr::select(SITE_ID,cl = CL_PPM,clflag = CL_FLAG)
+nla07 = nla07site %>% inner_join(nla07data)
 
-############# ############# ############# ############# ############# ############# 
+nla12site = read_csv('~/Documents/nla2007_alldata/nla2012_wide_siteinfo_08232016.csv') %>% 
+  dplyr::select(SITE_ID, UID, lat = LAT_DD83, long = LON_DD83, state = STATE, name = NARS_NAME)
+nla12data = read_csv('~/Documents/nla2007_alldata/nla2012_waterchem_wide.csv') %>% 
+  dplyr::select(UID,cl = CHLORIDE_RESULT,clflag = CHLORIDE_FLAG)
+nla12 = nla12site %>% inner_join(nla12data) %>% dplyr::select(-UID)
+
+
+nla = nla07 %>% bind_rows(nla12) %>% 
+  filter(!is.na(long)) %>% 
+  st_as_sf(coords = c('long','lat'),crs = 4326) %>%
+  st_transform(crs = st_crs(nhd1)) 
+
+nla.overlap = nla %>% st_join(nhd1, left=F) %>% 
+  dplyr::select(lagoslakeid = lagoslakei, SITE_ID, GNIS_Name,state:clflag) 
+st_geometry(nla.overlap) = NULL
+
+nla.overlap = nla.overlap %>% group_by(lagoslakeid) %>% 
+  summarise_all(list(first)) 
+
+predictionsNLA = nla.overlap %>% left_join(allLagos.out) %>% 
+  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  # mutate(cldiff = abs(newcl - cl)) %>% 
+  filter(!lagoslakeid %in% dat$lagoslakeid)  %>%  # which haven't been used in the model 
+  select(lagoslakeid:nhd_long,predictionAug:prediction.95,pred.Mean,pred.Median) %>% 
+  group_by(lagoslakeid) %>% 
+  dplyr::summarise_at(vars(cl,predictionAug:prediction.95,pred.Mean,pred.Median,nhd_lat,nhd_long), mean, na.rm=T) %>% 
+  left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) %>% 
+  filter(!is.na(pred.Median))
+
+fitsO <- lm(prediction.50 ~ log(cl), data = predictionsNLA); summary(fitsO) #r2 = 0.81
+
+fitsO = data.frame(r2 = paste0('r2 = ',round(summary(fitsO)$r.squared,2)),
+                   cl = 0.1,
+                   prediction.50 = 100)
+
+# predictionsNLA = predictionsNLA %>% mutate(train = ifelse(state %in% c('MN','WI','NY','VT','MI'),TRUE, FALSE))
+
+pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) + 
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  geom_point(aes(fill = nhd_lat), shape = 21) + 
+  ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
+  labs(title = 'Predicted NLA chloride') +
+  scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) + 
+  scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) +
+  scale_fill_viridis_c(direction = -1,name = 'Latitude') +
+  # geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
+  theme_bw() +
+  theme(#legend.position="bottom",
+        legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
+        legend.text=element_text(size=6), legend.title = element_text(size = 6),
+        legend.position=c(.7,.1), legend.direction = "horizontal",
+        legend.margin=margin(c(2,2,0,2)))
+# ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
+
+
+# Tichigan Lake
+# http://www.sewrpc.org/SEWRPCFiles/Publications/CAPR/capr-283_vol-01_waterford_impoundment.pdf
+# Observed: 127.153000	Predicted: 52.535753
+# In the surface waters of Tichigan Lake, chloride averaged about 69 mg/l in the
+# spring, 50 mg/l in summer, 42 mg/l in fall and winter (1973-2004)
+
+## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 ############# Compare to all field data ############# 
-b.all = b.WI %>% mutate(State = 'Wisconsin') %>% 
-  bind_rows(b.RI %>% mutate(State = 'Rhode Island') %>% dplyr::select(-depth)) %>% 
-  bind_rows(b.MN %>% mutate(State = 'Minnesota')) %>% 
+b.all = b.WI %>% mutate(State = 'WI') %>% 
+  bind_rows(b.RI %>% mutate(State = 'RI') %>% dplyr::select(-depth)) %>% 
+  bind_rows(b.MN %>% mutate(State = 'MN')) %>% 
   filter(!is.na(pred.Median)) %>% filter(!is.na(mean))
 
 summary(lm(pred.Mean ~ mean, data = b.all)) # r2 = 0.48
 summary(lm(pred.Median ~ mean, data = b.all)) # r2 = 0.50
 
-ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) + 
-  geom_point(shape = 22,alpha = 0.9) + 
+pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.3) +
+  geom_point(shape = 22,alpha = 0.9) + 
   scale_fill_viridis_d() +
   geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   labs(title = 'Predicted chloride concentrations') +
-  scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
+  scale_y_continuous(trans = log2_trans(), limits = c(0.1,400)) + scale_x_continuous(trans = log2_trans(), limits = c(0.1,400)) +
   theme_bw() +
-  scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) 
+  scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) +
+  theme(#legend.position="bottom",
+        legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
+        legend.text=element_text(size=6), legend.title = element_text(size = 6),
+        legend.position=c(.7,.1), legend.direction = "horizontal",
+        legend.margin=margin(c(0.5,2,0.5,2)))
 
-ggsave(filename = 'LAGOS_prediction/Figure_predictions_WIMNRI_mean.png',width = 7, height = 5, units = 'in')
+
+plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
+ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
 
