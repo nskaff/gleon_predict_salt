@@ -353,6 +353,6 @@ summary(exp(allLagos.out$prediction.50))
 
 
 
-
+#save.image(file='4.2RF_Environment.RData')
 
                

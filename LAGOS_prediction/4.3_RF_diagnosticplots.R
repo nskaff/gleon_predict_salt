@@ -1,4 +1,5 @@
 # For diagnostic plots, must fun RF script first to have the correct objects in working environment 
+#load('4.2RF_Environment.RData')
 
 #### 1) Box and Whisker Plots of scaled range in predictor variables (sup figure) ####
 combo = allLagos %>% mutate(group = ifelse(lagoslakeid %in% dat.out.mean$lagoslakeid,'Training Lakes','Lagos Lakes')) %>% 
@@ -80,12 +81,12 @@ ggsave(filename = 'LAGOS_prediction/Figure_observationsMonth.png',width = 4,heig
 # 5*) Feature contributions for forestfloor + variable importance (man figure) ####
 source("ranger_RFadaptor.R")
 source("ranger_plot.forestFloor.HD.R")
-ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$Chloride)
-ffra = forestFloor(ff_rf_model,rf_cov,calc_np = TRUE)
+ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
+ffra = forestFloor(ff_rf_model,rf_cov,calc_np = T)
 
 #Color by most important feature
 Col = fcol.HD(ffra,1)
-# plot(ffra, plot_seq=c(1,3,4,5,8), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
+# plot(ffra, plot_seq=c(1,2,3), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
 # plot.forestFloor.HD(ffra,plot_seq=c(3),cols = Col)
 pp = plot.forestFloor.HD(ffra,plot_seq=c(1,3,4,5,8,18))
 
