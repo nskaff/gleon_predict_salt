@@ -264,5 +264,5 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
 
 
 plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
-ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
+# ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
 

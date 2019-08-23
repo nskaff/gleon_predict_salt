@@ -65,7 +65,7 @@ sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 # dat_rf$cw = round(cw$cw,0)
 ##ranger version of random forest
 #generating a matrix of in-bag and out of bag observations
-ntree = 5000
+ntree = 500
 
 random_lake_samps <- lapply(1:ntree, function(i){
   #print(i)
@@ -88,7 +88,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 
   # # Only 1s and 0s
   unique_lakes<-unique(dat_rf$lagoslakeid)
-  lake_samp <- sample(unique_lakes, size =.95*length(unique_lakes), replace=F)
+  lake_samp <- sample(unique_lakes, size =.8*length(unique_lakes), replace=F)
   samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
 
   ## Nick's original code
@@ -114,6 +114,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 rf_model<-ranger(dependent.variable.name='logChloride',
                  data=data.frame(logChloride=dat_rf$logChloride,rf_cov),
                  inbag=random_lake_samps,
+                 mtry = 22,
                  num.trees=ntree, quantreg = T,
                  importance = 'permutation',
                  keep.inbag = TRUE)
@@ -122,15 +123,10 @@ rf_model
 ## Save the model
 # saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_08_14.rds")
 ## load the model
-# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_07_29.rds")
+# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_08_14.rds")
 
 quantiles = c(0.05,0.5,0.95)
 oob_quantiles <- predict(rf_model, type = 'quantiles', quantiles=quantiles)
-
-ggplot() + geom_point(aes(x = rf_model$predictions, y = oob_quantiles$predictions[,2])) +
-  ylab('50th percentile RF model') + xlab('Model Prediction') + 
-  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
-  theme_bw()
 
 ggplot() + geom_point(aes(x = dat_rf$logChloride, y = oob_quantiles$predictions[,2]), color = 'grey50', alpha = 0.4) +
   geom_point(aes(x = dat_rf$logChloride, y = rf_model$predictions), color = 'red4', alpha = 0.4) +
@@ -201,9 +197,17 @@ dat.out = dat_rf %>%
   mutate(PIspread = pred.95-pred.05) %>% 
   mutate(within = ifelse(Chloride >= pred.05 & Chloride <= pred.95, TRUE, FALSE))
 
+ggplot(dat.out) + geom_point(aes(x = pred, y = pred.50)) +
+  # geom_point(data = filter(dat.out,lagoslakeid ==6397),aes(x = pred, y = pred.50), color = 'red') +
+  geom_point(data = test,aes(x = pred, y = pred.50), color = 'red') +
+  ylab('50th percentile RF model') + xlab('Model Prediction') + 
+  geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
+  theme_bw()
+
+test = dat.out %>% filter(abs(pred.50-pred) > 2)
+
 # useID = pull(dat_rf %>% arrange(desc(CIspread)) %>% select(lagoslakeid) %>% slice(1:10))
 table(dat.out$within)
-
 
 
 p1 = ggplot(dat.out, aes(x = logChloride, y = pred.50, color = log(MaxDepth))) +
@@ -343,8 +347,14 @@ lakes100 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 100) %>%
   filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 table(lakes50$state_zoneid)
 
-lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) %>% 
-  filter(!lagoslakeid %in% dat_rf$lagoslakeid)
+lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) #%>% 
+  # filter(!lagoslakeid %in% dat_rf$lagoslakeid)
+
+lakes10 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 
+
+nrow(lakes50)/nrow(allLagos.out)
+nrow(lakes10)/nrow(allLagos.out)
+
 table(lakes50$state_zoneid)
 summary(dat.out.mean$medianCl)
 summary(exp(undupLakes$prediction.50))

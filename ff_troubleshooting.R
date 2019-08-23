@@ -29,9 +29,22 @@ sum_med_low_dev<-ffra$FCmatrix[,"WS.Dev.Med"]+ffra$FCmatrix[,"WS.Dev.Low"]
 
 sum_low_dev_crop<-ffra$FCmatrix[,"WS.Dev.Med"]+ffra$FCmatrix[,"WS.Crops"]
 
+WS.Dev.LowMed
+
+
 ggplot()+ geom_point( aes(x=ffra$X$WS.Dev.Low, y=ffra$X$WS.Crops, color = sum_low_dev_crop)) + 
   scale_color_distiller(palette='Spectral') +
   theme_bw()
 
-
+sum_low_dev_crop <- ffra2$FCmatrix[,"WS.Dev.LowMed"]+ffra2$FCmatrix[,"WS.Crops"]
+ggplot()+ geom_point( aes(x=ffra2$X$WS.Dev.LowMed, y=ffra2$X$WS.Crops, color = ffra2$FCmatrix[,"WS.Dev.LowMed"])) + 
+  scale_color_distiller(palette='Spectral') +
+  theme_bw()
+ggplot()+ geom_point( aes(x=ffra2$X$WS.Dev.LowMed, y=ffra2$X$WS.Crops, color = ffra2$FCmatrix[,"WS.Crops"])) + 
+  scale_color_distiller(palette='Spectral') +
+  theme_bw()
+ggplot()+ geom_point( aes(x=ffra2$X$WS.Dev.LowMed, y=ffra2$X$WS.Crops, color = sum_low_dev_crop)) + 
+  scale_color_distiller(palette='Spectral', name = 'Feature \nContribution') +
+  xlab('Watershed Low + Med Development %') + ylab('Watershed Crop %') +
+  theme_bw()
 

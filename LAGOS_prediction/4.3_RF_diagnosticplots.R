@@ -1,5 +1,6 @@
 # For diagnostic plots, must fun RF script first to have the correct objects in working environment 
 #load('4.2RF_Environment.RData')
+library(RColorBrewer)
 
 #### 1) Box and Whisker Plots of scaled range in predictor variables (sup figure) ####
 combo = allLagos %>% mutate(group = ifelse(lagoslakeid %in% dat.out.mean$lagoslakeid,'Training Lakes','Lagos Lakes')) %>% 
@@ -12,9 +13,10 @@ combo = allLagos %>% mutate(group = ifelse(lagoslakeid %in% dat.out.mean$lagosla
 long_all = gather(combo, key = attribute, value = value, - group) 
 
 ggplot(long_all, aes(x = attribute, y = value, col = group)) + geom_boxplot(outlier.shape = NA) +
+  theme_bw(base_size = 9) +
   theme(axis.text.x = element_text(angle = 90)) +
   # ylim(-6,7) +
-  coord_cartesian()
+  xlab("") + ylab("log value") 
 ggsave('LAGOS_prediction/Figure_CompareObsLagos_logbw.png',width = 7,height = 4)
 
 # Not log transformed
@@ -57,58 +59,88 @@ ggsave('LAGOS_prediction/Figure_PCA.png',width = 7,height = 5)
 #### 3) Correlation Matrix (sup figure) ####
 names(dat) %in% names(rf_cov)
 
-  png(file = "LAGOS_prediction/correlationPlot.png",width = 15,height = 15, units = 'in', res = 300)
-    dat.cor = round(cor(dat[,names(dat) %in% names(rf_cov)],use = 'complete.obs'),2)
+dat.group = dat_rf %>% group_by(lagoslakeid) %>% 
+  dplyr::summarise_if(is.numeric,list(mean)) %>%
+  select(names(rf_cov)[-1])
+  
+png(file = "LAGOS_prediction/correlationPlot.png",width = 15,height = 15, units = 'in', res = 300)
+    dat.cor = round(cor(dat.group,use = 'complete.obs'),2)
     # dat.cor = round(cor(dat[,c(8:12,14:30,67:71)],use = 'complete.obs'),2)
     corrplot(dat.cor, method = "ellipse")
-  dev.off()
-#Correlation Matrix on log values 
-  png(file = "LAGOS_prediction/correlationPlot_log.png",width = 15,height = 15, units = 'in', res = 300)
-    dat.cor = round(cor(dat[,names(dat) %in% names(rf_cov)],use = 'complete.obs'),2)
-    corrplot(dat.cor, method = "ellipse")
-  dev.off()
+dev.off()
+
 
 
 
 
 # 4) Month of Observations (sup figure) ####
-head(getDat)
-ggplot(getDat) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'red4', alpha = 0.8) +
+ggplot(dat_rf) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'red4', alpha = 0.8) +
   scale_x_continuous(breaks = 1:12) +
   xlab('Month of Observation') + ylab('Count')
+table(dat_rf$Month)
+nrow(dat_rf %>% filter(Month >=5 & Month <= 9))/nrow(dat_rf)
+
 ggsave(filename = 'LAGOS_prediction/Figure_observationsMonth.png',width = 4,height = 3)
 
+sum(!is.na(allLagos$MaxDepth))
+sum(!is.na(dat_rf %>% group_by(lagoslakeid) %>% summarise(depth = mean(MaxDepth)) %>% 
+             select(depth)))
+
 # 5*) Feature contributions for forestfloor + variable importance (man figure) ####
-source("ranger_RFadaptor.R")
-source("ranger_plot.forestFloor.HD.R")
-ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
-ffra = forestFloor(ff_rf_model,rf_cov,calc_np = T)
-
-#Color by most important feature
-Col = fcol.HD(ffra,1)
-# plot(ffra, plot_seq=c(1,2,3), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
-# plot.forestFloor.HD(ffra,plot_seq=c(3),cols = Col)
-pp = plot.forestFloor.HD(ffra,plot_seq=c(1,3,4,5,8,18))
-
 #variable importance
 v<-as.numeric(rf_model$variable.importance)
 w<-as.character(names(rf_model$variable.importance))
 DF<-data.frame(w=w,v=as.numeric(v)) %>% arrange(v)
 DF$w <- factor(DF$w, levels = DF$w)
 
-p1 = ggplot(DF, aes(x=w, y=v,fill=v))+
+pvar = ggplot(DF, aes(x=w, y=v,fill=v))+
   geom_bar(stat="identity", position="dodge") + coord_flip() +
-  scale_fill_gradient(low = 'grey70',high = 'grey10') +
+  scale_fill_gradient(low = 'lightsteelblue3',high = 'lightsteelblue4') +
   ylab("Variable Importance") + xlab("")+
   theme_bw(base_size = 9) +
   # theme(axis.text = element_text(size=8), axis.title=element_text(size=8)) +
   guides(fill=F)
 
-rightside = do.call(plot_grid, c(pp, list(labels = c('b','c','d','e','f','g'), label_size = 10, nrow = 2, align = 'hv')))
-p17 = plot_grid(p1,rightside, labels = c('a',''), label_size = 10, ncol = 2, rel_widths = c(0.8,1))
-ggsave(plot = p17,filename = 'LAGOS_prediction/Figure_VariableImportance_FeaturePlots.png',width = 8,height = 5)
 
-# 6*) Prediction intervals of model + LAGOS lakes (man figure) + histogram #####
+# Amend Matrix 
+source("ranger_RFadaptor.R")
+source("ranger_plot.forestFloor.HD.R")
+ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
+ffra = forestFloor(ff_rf_model,rf_cov,calc_np = T)
+
+ffra2 = ffra 
+ffra2$X$WS.Dev.LowMed = log(exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med))
+ffra2$importance[23] = ffra2$importance[7] + ffra2$importance[8]
+ffra2$FCmatrix = cbind(ffra2$FCmatrix, ffra2$FCmatrix[,"WS.Dev.Low"] + ffra2$FCmatrix[,"WS.Dev.Med"])
+attr(ffra2$FCmatrix,'dimnames')[[2]][23] = 'WS.Dev.LowMed'
+ffra2$imp_ind = order(ffra2$importance,decreasing = T)
+
+# Scatter plot between crops and dev
+sum_low_dev_crop <- ffra2$FCmatrix[,"WS.Dev.LowMed"]+ffra2$FCmatrix[,"WS.Crops"]
+p67 = ggplot()+ geom_point( aes(x=exp(ffra2$X$WS.Dev.LowMed), y=exp(ffra2$X$WS.Crops), fill = sum_low_dev_crop), pch = 21, color = 'grey50') + 
+  scale_fill_distiller(palette='RdYlBu', direction = 1, name = 'Feature \nContribution') +
+  xlab('Watershed Low + Med Development %') + ylab('Watershed Crop %') +
+  scale_y_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) + 
+  scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) +
+  theme_bw(base_size = 9) +
+  theme(legend.text = element_text(size=6),legend.title = element_text(size=6))
+   
+legend <- get_legend(p67)
+p68 <- p67 + theme(legend.position='none')
+topside = plot_grid(pvar, p67, nrow = 1, align = 'h', labels = c('a','b'),label_size = 10, rel_widths = c(0.4,0.6))
+
+
+#Color by most important feature
+Col = fcol.HD(ffra2,1)
+# plot(ffra, plot_seq=c(1,2,3), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
+# pp = plot.forestFloor.HD(ffra,plot_seq=c(1,2,3,5,8,18),cols = Col)
+pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,3,4,6,8,21), cols = Col)
+do.call(plot_grid, c(pp, list(nrow = 2, align = 'hv')))
+
+rightside = do.call(plot_grid, c(pp, list(labels = c('b','c','d','e','f','g'), label_size = 10, nrow = 2, align = 'hv')))
+# bottomside = plot_grid(rightside,legend,nrow = 1, rel_widths = c(0.9,0.1))
+ 
+ # 6*) Prediction intervals of model + LAGOS lakes (man figure) + histogram #####
 p4 = ggplot(data = allLagos.out) + 
   geom_errorbar(aes(ymin=exp(prediction.05)[order(prediction.50)],
                     ymax=exp(prediction.95)[order(prediction.50)],
@@ -169,7 +201,7 @@ ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
   ylab(bquote('Log Mean Residual Chloride'~(mg~L^-1))) +
   xlab('Number of Observations') + 
   theme_bw()
-ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 5)
+ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 3)
 
 
 # 8*) Mean correlation between lakes (man fig) #### 
@@ -311,8 +343,14 @@ p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue),
   xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
   labs(title = 'Bde Maka Ska, MN') +
   theme_bw()
-a = dat %>% filter(lagoslakeid == 173) # 20 ha, 463 ha WS
-p14 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue), pch = 21, fill = 'grey50') +
+
+
+allLagos.out %>% filter(lagoslakeid == 173) %>% select(prediction.50)
+diamondLake = dat %>% filter(lagoslakeid == 173) # 20 ha, 463 ha WS
+mean(diamondLake$Chloride)
+range(diamondLake$Chloride)
+median(diamondLake$Chloride)
+p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue), pch = 21, fill = 'grey50') +
   xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
   labs(title = 'Diamond Lake, MN') +
   theme_bw()

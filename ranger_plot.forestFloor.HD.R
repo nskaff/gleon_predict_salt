@@ -1,6 +1,11 @@
 # https://github.com/sorhawell/forestFloor/blob/master/R/fcol.R
+library(RColorBrewer)
 
-plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols) {
+plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL) {
+  
+  if (is.null(cols)) {
+    cols = fcol.HD(x,1)
+  }
   
   #short for features and feature contribution in object
   X = x$X
@@ -33,37 +38,44 @@ plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols) {
       xplot = data.frame(
         physical.value = jitter(X[,imp.ind[i]],factor=jitter.template[imp.ind[i]]*2),
         partial.contribution  = FCs[,imp.ind[i]])
-      xplot = xplot %>% mutate(cols = fcol.HD(ffra,1)) 
+      xplot = xplot %>% mutate(cols = cols) 
       
-      p[[j]] = ggplot(xplot) + geom_point(aes(x = physical.value, y = partial.contribution, color = cols),
+      p[[j]] = ggplot(xplot) + geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols),
                                           size = 0.8, alpha = 0.6) +
+        scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) +
         ylim(min(FCuse), max(FCuse)) +
         theme_bw(base_size = 8) +
-        theme(axis.title.x=element_blank(),axis.title.y=element_blank()) +
+        ylab('') +
+        # theme(axis.title.y=element_blank()) + #axis.title.x=element_blank()
         scale_colour_identity() +
-        labs(title = names(x$X)[imp.ind[i]])
+        xlab(label = names(x$X)[imp.ind[i]])
   }
   # Plot grid 
   # do.call(plot_grid, c(p, list(labels = c('A', 'B', 'C','D','E'), label_size = 10, nrow = 2, align = 'hv')))
   return(p)
 }
 
-fcol.HD = function(ff,cols) {
+fcol.HD = function(ff,selCol) {
   colM = ff$X #else colM = ff$FCmatrix
   #reorder colM by importance
   colM = colM[,ff$imp_ind]
   #convert matrix to data.frame
   colM = data.frame(colM)
   
-  sel.colM = data.frame(colM[,cols])    #use only selected columns
+  sel.colM = data.frame(colM[,selCol])    #use only selected columns
   sel.cols = 1:length(cols) #update cols to match new col.indices of colM
 
+  sel.colM = rowSums(sel.colM)
   #restrain outliers by limit(std.dev) and normalize.
   sel.colM = box.outliers(sel.colM,limit=3)
   
   ###################
   len.colM = box.outliers(sel.colM,limit=Inf) * 19 + 1
-  colours = viridis_pal()(20) [len.colM$colM...cols.]
+  # colours = viridis_pal()(20) [len.colM$colM...cols.]
+  colorRampPalette(brewer.pal(11, "RdYlBu"))(colourCount)
+  # colours = brewer.pal(11, 'RdYlBu') [len.colM$colM...cols.]
+  colours = colorRampPalette(brewer.pal(11, 'RdYlBu'))(20) [len.colM[,1]]
+  
   return(colours)
 }
 
