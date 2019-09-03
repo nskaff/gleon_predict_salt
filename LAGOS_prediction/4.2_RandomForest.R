@@ -121,7 +121,7 @@ rf_model<-ranger(dependent.variable.name='logChloride',
 rf_model
 
 ## Save the model
-# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_mtry22_2019_09_03.rds")
+# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_09_03.rds")
 ## load the model
 # rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_08_14.rds")
 
