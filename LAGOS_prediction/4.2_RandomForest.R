@@ -37,7 +37,7 @@ dat = data.frame(dat)
 # Function to take log of columsn 
 log01 <- function(x){log(x + 0.001)} # log of columns 
 dat_rf <- dat %>%
-  mutate_at(vars(logChloride = Chloride,LakeArea,WS.Area,wlconnections_allwetlands_count:RoadDistance),log01) %>%
+  mutate_at(vars(logChloride = Chloride,LakeArea,WS.Area,wlconnections_allwetlands_count:RoadDistance, WinterSeverity),log01) %>%
   mutate(Month = month(ActivityStartDate)) %>%
   filter(!is.na(WS.Dev.Low)) %>% 
   filter(!is.na(TonsPerMile)) %>%
@@ -65,7 +65,7 @@ sapply(rf_cov, function(x) sum(is.na(x))) # See if there are NA values
 # dat_rf$cw = round(cw$cw,0)
 ##ranger version of random forest
 #generating a matrix of in-bag and out of bag observations
-ntree = 500
+ntree = 1000
 
 random_lake_samps <- lapply(1:ntree, function(i){
   #print(i)
@@ -88,7 +88,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 
   # # Only 1s and 0s
   unique_lakes<-unique(dat_rf$lagoslakeid)
-  lake_samp <- sample(unique_lakes, size =.8*length(unique_lakes), replace=F)
+  lake_samp <- sample(unique_lakes, size =.95*length(unique_lakes), replace=F)
   samp = as.integer(dat_rf$lagoslakeid %in% lake_samp)
 
   ## Nick's original code
@@ -114,14 +114,14 @@ random_lake_samps <- lapply(1:ntree, function(i){
 rf_model<-ranger(dependent.variable.name='logChloride',
                  data=data.frame(logChloride=dat_rf$logChloride,rf_cov),
                  inbag=random_lake_samps,
-                 mtry = 22,
+                 mtry = 4,
                  num.trees=ntree, quantreg = T,
                  importance = 'permutation',
                  keep.inbag = TRUE)
 rf_model
 
 ## Save the model
-# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_08_14.rds")
+# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_mtry22_2019_09_03.rds")
 ## load the model
 # rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_08_14.rds")
 
@@ -135,24 +135,10 @@ ggplot() + geom_point(aes(x = dat_rf$logChloride, y = oob_quantiles$predictions[
 summary(lm(oob_quantiles$predictions[,2] ~ dat_rf$logChloride))
 summary(lm(rf_model$predictions ~ dat_rf$logChloride))
 
-ggplot() + 
-  geom_errorbar(aes(ymin=dat.out$pred.05[order(dat.out$pred.50)],
-                    ymax=dat.out$pred.95[order(dat.out$pred.50)], 
-                    x=1:length(dat.out$pred.50)), alpha=.01) +
-  geom_point(aes(y=dat.out$pred.50[order(dat.out$pred.50)], 
-                 x=1:length(dat.out$pred.50)), 
-             color="gold", alpha = 0.5, size = 0.4, shape = 16) +
-  # geom_point(aes(y=rf_model$predictions[order(rf_model$predictions)], 
-  #                 x=1:length(rf_model$predictions)), 
-  #             color="red4") +
-  xlab('Observation ID') + ylab('Predicted Chloride w/ PI') +
-  theme_bw()
-ggsave('LAGOS_prediction/Figure_PredictionsCI2.png',width = 6,height = 4)
-
 
 length(rf_model$predictions[rf_model$predictions < oob_quantiles$predictions[,1]])
 length(rf_model$predictions[rf_model$predictions > oob_quantiles$predictions[,3]])
-(1139+2027)/length(dat_rf$logChloride)
+(1270+1974)/length(dat_rf$logChloride)
 
 
 # preds<-predict(rf_model, data=rf_cov,predict.all = T )
@@ -197,14 +183,28 @@ dat.out = dat_rf %>%
   mutate(PIspread = pred.95-pred.05) %>% 
   mutate(within = ifelse(Chloride >= pred.05 & Chloride <= pred.95, TRUE, FALSE))
 
+
+ggplot() + 
+  geom_errorbar(aes(ymin=dat.out$pred.05[order(dat.out$pred.50)],
+                    ymax=dat.out$pred.95[order(dat.out$pred.50)], 
+                    x=1:length(dat.out$pred.50)), alpha=.01) +
+  geom_point(aes(y=dat.out$pred.50[order(dat.out$pred.50)], 
+                 x=1:length(dat.out$pred.50)), 
+             color="gold", alpha = 0.5, size = 0.4, shape = 16) +
+  # geom_point(aes(y=rf_model$predictions[order(rf_model$predictions)], 
+  #                 x=1:length(rf_model$predictions)), 
+  #             color="red4") +
+  xlab('Observation ID') + ylab('Predicted Chloride w/ PI') +
+  theme_bw()
+ggsave('LAGOS_prediction/Figure_PredictionsCI2.png',width = 6,height = 4)
+
+test = dat.out %>% filter(abs(pred.50-pred) > 2)
 ggplot(dat.out) + geom_point(aes(x = pred, y = pred.50)) +
   # geom_point(data = filter(dat.out,lagoslakeid ==6397),aes(x = pred, y = pred.50), color = 'red') +
-  geom_point(data = test,aes(x = pred, y = pred.50), color = 'red') +
+  geom_point(data = test, aes(x = pred, y = pred.50), color = 'red') +
   ylab('50th percentile RF model') + xlab('Model Prediction') + 
   geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
   theme_bw()
-
-test = dat.out %>% filter(abs(pred.50-pred) > 2)
 
 # useID = pull(dat_rf %>% arrange(desc(CIspread)) %>% select(lagoslakeid) %>% slice(1:10))
 table(dat.out$within)
@@ -292,7 +292,7 @@ allLagos.out = allLagos %>%
 table(allLagos.out$obsLakes)
 
 # write_csv(allLagos.out,'LAGOS_prediction/output_data_allLagosPredictions.csv')
-allLagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions.csv')
+# allLagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions.csv')
 
 summary(filter(allLagos.out, obsLakes == TRUE)$PIrange)
 summary(filter(allLagos.out, obsLakes == FALSE)$PIrange)
@@ -306,7 +306,7 @@ dat.out.mean = dat.out %>% dplyr::mutate(predicted = as.numeric(pred)) %>%
             test = median(pred.50),
             lakeconn = first(lakeconnection), lat = first(nhd_lat), long = first(nhd_long), count = n()) %>%
   arrange(meanCl) %>% mutate(id = as.numeric(rownames(.))) %>% 
-  mutate(withinPI = ifelse(min >= pred.05 & max <= pred.95, TRUE, FALSE)) %>% 
+  mutate(withinPI = ifelse(min >= exp(pred.05) & max <= exp(pred.95), TRUE, FALSE)) %>% 
   mutate(residuals.50 = pred.50 - log(medianCl)) 
 
 table(dat.out.mean$withinPI)

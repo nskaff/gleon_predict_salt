@@ -1,0 +1,76 @@
+library(ggspatial)
+
+# 12) High lakes (man figure) ####
+b = allLagos.out %>% 
+  filter(prediction.50 > log(50)) %>% 
+  mutate(cols = 
+           case_when(exp(prediction.50) < 100 ~ 1,
+                     exp(prediction.50) >= 100 & exp(prediction.50) <260 ~ 2,
+                     exp(prediction.50) > 260 ~ 3)) %>% 
+  mutate(expCl = exp(prediction.50)) #%>% 
+# st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
+
+mapHighLakes = ggplot(data = b %>% filter(obsLakes == FALSE)) +
+  geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
+                                               'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
+                                               'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], 
+          fill="grey90", size = 0.5)+
+  geom_point(aes(x=nhd_long, y=nhd_lat), size = 0.8, shape = 16) +
+  # scale_color_viridis_c(option="magma", direction = -1, name = 'Cl (mg/L)')+
+  theme_bw(base_size = 9) +
+  theme(axis.title.x=element_blank(),axis.title.y=element_blank())
+ggsave(filename = 'LAGOS_prediction/Map_HighLakes.png',width = 7, height = 4)
+
+
+# m = b %>% mapview(zcol = "expCl", layer.name = 'Predicted Chloride (mg/L)')
+# m
+# mapshot(m, url = paste0(getwd(), "/html/map.html"))
+
+
+# esri_ocean <- paste0('https://services.arcgisonline.com/arcgis/rest/services/',
+#                      'Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}.jpeg')
+esri_land <- paste0('https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
+esri_streets <- paste0('https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
+
+
+# Chicagoland 
+chicago.map = b %>% 
+  filter(nhd_lat < 42.4 & nhd_lat > 41.6) %>% 
+  filter(nhd_long > -88.5 & nhd_long < -87.5) %>% 
+  st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
+
+map.chicago = ggplot(chicago.map) +
+  annotation_map_tile(type = esri_streets, zoom = 10) +  
+  geom_sf( size = 0.8, color = 'black',
+          show.legend = "point", inherit.aes = FALSE) +
+  theme_bw(base_size = 9) +
+  theme(axis.title.x=element_blank(),axis.title.y=element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Chicagoland 
+boston.map = b %>% 
+  filter(nhd_lat < 42.5 & nhd_lat > 41.7) %>% 
+  filter(nhd_long > -71.6 & nhd_long < -70.6) %>% 
+  st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
+
+map.boston = ggplot(boston.map) +
+  annotation_map_tile(type = esri_streets, zoom = 10) +  
+  geom_sf( size = 0.8, color = 'black',
+          show.legend = "point", inherit.aes = FALSE) +
+  theme_bw(base_size = 9) +
+  theme(axis.title.x=element_blank(),axis.title.y=element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# mapCities = plot_grid(map.chicago, map.boston, labels = c('b', 'c'), label_size = 10, nrow = 1, align = 'h')
+# ggsave(plot = mapCities, filename = 'LAGOS_prediction/Map_cities.png',width = 7, height = 4)
+# 
+# 
+# mapCombo = plot_grid(mapHighLakes, mapCities, labels = c('a', ''), label_size = 10, ncol = 1)
+# ggsave(plot = mapCombo, filename = 'LAGOS_prediction/Map_Combo.png',width = 7, height = 5)
+
+mapCombo2 = plot_grid(mapHighLakes, map.chicago, map.boston, labels = c('a', 'b', 'c'), 
+                      label_size = 10, nrow = 1,rel_widths = c(0.4,0.3,0.3))
+ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Map_Combo.png',width = 7, height = 2.5)
+ 
+

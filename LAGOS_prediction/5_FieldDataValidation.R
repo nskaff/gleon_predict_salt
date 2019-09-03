@@ -205,7 +205,7 @@ predictionsNLA = nla.overlap %>% left_join(allLagos.out) %>%
   filter(!is.na(pred.Median))
 
 fitsO <- lm(prediction.50 ~ log(cl), data = predictionsNLA); summary(fitsO) #r2 = 0.81
-
+summary(fitsO)
 fitsO = data.frame(r2 = paste0('r2 = ',round(summary(fitsO)$r.squared,2)),
                    cl = 0.1,
                    prediction.50 = 100)

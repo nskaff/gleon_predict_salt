@@ -41,13 +41,13 @@ plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL) {
       xplot = xplot %>% mutate(cols = cols) 
       
       p[[j]] = ggplot(xplot) + geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols),
-                                          size = 0.8, alpha = 0.6) +
+                                           shape = 16, size = 0.7, alpha = 0.7) +
         scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) +
         ylim(min(FCuse), max(FCuse)) +
         theme_bw(base_size = 8) +
         ylab('') +
         # theme(axis.title.y=element_blank()) + #axis.title.x=element_blank()
-        scale_colour_identity() +
+        scale_color_identity() +
         xlab(label = names(x$X)[imp.ind[i]])
   }
   # Plot grid 
@@ -56,6 +56,7 @@ plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL) {
 }
 
 fcol.HD = function(ff,selCol) {
+
   colM = ff$X #else colM = ff$FCmatrix
   #reorder colM by importance
   colM = colM[,ff$imp_ind]
@@ -71,13 +72,9 @@ fcol.HD = function(ff,selCol) {
   
   ###################
   len.colM = box.outliers(sel.colM,limit=Inf) * 19 + 1
-  # colours = viridis_pal()(20) [len.colM$colM...cols.]
-  colorRampPalette(brewer.pal(11, "RdYlBu"))(colourCount)
-  # colours = brewer.pal(11, 'RdYlBu') [len.colM$colM...cols.]
-  colours = colorRampPalette(brewer.pal(11, 'RdYlBu'))(20) [len.colM[,1]]
-  
+
+  colours = colorRampPalette(brewer.pal(9, 'BrBG'))(20) [len.colM[,1]]
+
   return(colours)
 }
-
-
 
