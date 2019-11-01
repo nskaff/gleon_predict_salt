@@ -1,4 +1,9 @@
 library(ggspatial)
+library(tigris)
+library(mapview)
+library(viridisLite)
+states <- states(cb = TRUE)
+states_sf<- st_as_sf(states)
 
 # 12) High lakes (man figure) ####
 b = allLagos.out %>% 
@@ -48,7 +53,7 @@ map.chicago = ggplot(chicago.map) +
         axis.text.x = element_text(angle = 45, hjust = 1))
 
 
-# Chicagoland 
+# Boston
 boston.map = b %>% 
   filter(nhd_lat < 42.5 & nhd_lat > 41.7) %>% 
   filter(nhd_long > -71.6 & nhd_long < -70.6) %>% 

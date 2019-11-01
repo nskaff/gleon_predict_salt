@@ -13,28 +13,12 @@ combo = allLagos %>% mutate(group = ifelse(lagoslakeid %in% dat.out.mean$lagosla
 long_all = gather(combo, key = attribute, value = value, - group) 
 
 ggplot(long_all, aes(x = attribute, y = value, col = group)) + geom_boxplot(outlier.shape = NA) +
+  scale_color_manual(values = c("grey60","darkslategray3"), name = 'Group') +
   theme_bw(base_size = 9) +
   theme(axis.text.x = element_text(angle = 90)) +
   # ylim(-6,7) +
-  xlab("") + ylab("log value") 
+  xlab("") + ylab("Log Value") 
 ggsave('LAGOS_prediction/Figure_CompareObsLagos_logbw.png',width = 7,height = 4)
-
-# Not log transformed
-### Load LAGOS data ####
-c1 = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
-  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
-names(c1) = colNames$NewLagos
-c2 = c1 %>%
-  mutate(group = ifelse(lagoslakeid %in% dat.out.mean$lagoslakeid,'Training Lakes','Lagos Lakes')) %>% 
-  filter(!is.na(WS.Dev.Low)) %>% 
-  select_(.dots = c('group',names(rf_cov)[-1])) %>% 
-  mutate_if(is.numeric, scale)
-
-c3 = gather(c2, key = attribute, value = value, - group) 
-ggplot(c3, aes(x = attribute, y = value, col = group)) + geom_boxplot(outlier.shape = NA) +
-  theme(axis.text.x = element_text(angle = 90)) +
-  ylim(-2,3) 
-ggsave('LAGOS_prediction/Figure_CompareObsLagos_bw.png',width = 7,height = 4)
 
 
 #### 2) PCA Plot of observations vs. Lagos (sup figure) ####
@@ -49,14 +33,23 @@ a = autoplot(prcomp(lagos.pca, center = T, scale = T), data = combo, fill = 'gro
              loadings.colour = 'black',loadings.label.colour = 'black',
              loadings.label = TRUE, loadings.label.size = 3)
 
-a + scale_fill_manual(values = c("grey90","darkslategray3")) + 
-  scale_color_manual(values = c("grey90","darkslategray3")) + 
-  scale_alpha_manual(values = 0.5) +
-  theme_bw()
+a + scale_fill_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
+  scale_color_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
+  scale_alpha_manual(values = 0.5, name = 'Group') +
+  theme_bw() 
 ggsave('LAGOS_prediction/Figure_PCA.png',width = 7,height = 5)
 
+a = autoplot(prcomp(lagos.pca, center = T, scale = T), data = combo, fill = 'group', alpha = 0.5, colour = 'group', loadings = TRUE,
+             loadings.colour = 'black',loadings.label.colour = NA,
+             loadings.label = TRUE, loadings.label.size = 3)
 
-#### 3) Correlation Matrix (sup figure) ####
+a + scale_fill_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
+  scale_color_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
+  scale_alpha_manual(values = 0.5, name = 'Group') +
+  theme_bw() 
+ggsave('LAGOS_prediction/Figure_PCA_nolabels.png',width = 7,height = 4)
+
+  #### 3) Correlation Matrix (sup figure) ####
 names(dat) %in% names(rf_cov)
 
 dat.group = dat_rf %>% group_by(lagoslakeid) %>% 
@@ -66,12 +59,12 @@ dat.group = dat_rf %>% group_by(lagoslakeid) %>%
 png(file = "LAGOS_prediction/correlationPlot.png",width = 10,height = 10, units = 'in', res = 300)
     dat.cor = round(cor(dat.group,use = 'complete.obs'),2)
     # dat.cor = round(cor(dat[,c(8:12,14:30,67:71)],use = 'complete.obs'),2)
-    corrplot(dat.cor, method = "ellipse")
+    corrplot(dat.cor, method = "ellipse",tl.col = 'black')
 dev.off()
 
 
 # 4) Month of Observations (sup figure) ####
-ggplot(dat_rf) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'red4', alpha = 0.8) +
+ggplot(dat_rf) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'darkslategray3', alpha = 0.8) +
   scale_x_continuous(breaks = 1:12) +
   xlab('Month of Observation') + ylab('Count')
 table(dat_rf$Month)
@@ -168,6 +161,7 @@ p5 = ggplot() +
   geom_vline(xintercept = c(230,860),linetype = 2) +
   annotate(geom='text',label = 'Cl = 230, EPA Chronic chloride toxicity',x = 190, y = 0.7, angle = 90, size = 2.5) +
   annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.7, angle = 90, size = 2.5)
+ggsave(p5,filename = 'LAGOS_prediction/Figure_LAGOShistogram.png', width  = 7, height=3)
 
 plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
 ggsave('LAGOS_prediction/Figure_LAGOSpredictions.png',width = 7,height = 5)
@@ -318,12 +312,14 @@ ggsave(plot = mapDiag, filename = 'LAGOS_prediction/Map_diagnostics.png',width =
 # 13) Outliers = Lake Calhoun, MN is a good example Bde Maka Ska ####
 
 a = dat %>% filter(lagoslakeid ==  1696) #169 ha WS
-p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue), pch = 21, fill = 'grey50') +
+p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue,fill = month(ActivityStartDate, label = T)), pch = 21) +
   # geom_point(data = filter(a, ResultMeasureValue < 10),aes(x = ActivityStartDate, y = ResultMeasureValue), 
              # fill = 'gold', size = 3,pch = 23) +
+  scale_fill_viridis_d(name = '') +
   xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
   labs(title = 'Bde Maka Ska, MN') +
-  theme_bw()
+  theme_bw() +
+  theme(legend.position="none")
 
 
 allLagos.out %>% filter(lagoslakeid == 173) %>% select(prediction.50)
@@ -331,11 +327,25 @@ diamondLake = dat %>% filter(lagoslakeid == 173) # 20 ha, 463 ha WS
 mean(diamondLake$Chloride)
 range(diamondLake$Chloride)
 median(diamondLake$Chloride)
-p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue), pch = 21, fill = 'grey50') +
-  xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
-  labs(title = 'Diamond Lake, MN') +
-  theme_bw()
-plot_grid(p13, p14, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
-ggsave(filename = 'LAGOS_prediction/Figure_Lake1696.png',width = 7, height = 2.5)
 
+ggplot(diamondLake) + geom_point(aes(x = month(ActivityStartDate), y = Chloride))
+
+p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue, fill = month(ActivityStartDate, label = T)), pch = 21) +
+  scale_fill_viridis_d(name = '') +
+  xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
+  xlim(as.Date('2003-01-01'),NA) +
+  labs(title = 'Diamond Lake, MN') +
+  theme_bw() +
+  guides(fill=guide_legend(nrow = 5)) +
+  theme(legend.box.background = element_rect(colour = "black"),
+        legend.position=c(.75,.8),
+        legend.direction="horizontal",
+        legend.text = element_text(size=6),legend.title = element_text(size=6),
+        legend.key.height =unit(3,"pt"), legend.key.width =unit(15,"pt"))
+  
+
+
+plot_grid(p14, p13, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
+ggsave(filename = 'LAGOS_prediction/Figure_Lake1696.png',width = 7, height = 2.5)
+ 
 

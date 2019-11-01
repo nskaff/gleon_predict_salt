@@ -123,7 +123,7 @@ rf_model
 ## Save the model
 # saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_09_03.rds")
 ## load the model
-# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_08_14.rds")
+rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_09_03.rds")
 
 quantiles = c(0.05,0.5,0.95)
 oob_quantiles <- predict(rf_model, type = 'quantiles', quantiles=quantiles)
@@ -349,11 +349,16 @@ table(lakes50$state_zoneid)
 
 lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) #%>% 
   # filter(!lagoslakeid %in% dat_rf$lagoslakeid)
+1930 - 1679
 
 lakes10 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 
+lakes0 = allLagos.out %>% dplyr::filter(exp(prediction.50) < 20) 
+
+2773/nrow(allLagos.out)
 
 nrow(lakes50)/nrow(allLagos.out)
 nrow(lakes10)/nrow(allLagos.out)
+nrow(lakes0)/nrow(allLagos.out)
 
 table(lakes50$state_zoneid)
 summary(dat.out.mean$medianCl)

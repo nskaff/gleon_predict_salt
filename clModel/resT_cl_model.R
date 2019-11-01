@@ -1,3 +1,12 @@
+allLagos = read_csv('LAGOS_prediction/data5_LAGOS_allLakes.csv') %>%
+  filter(state_zoneid != 'OUT_OF_COUNTY_STATE') 
+colNames = read_csv('LAGOS_prediction/ColNames.csv')
+names(allLagos) = colNames$NewLagos
+
+allLagos <- allLagos %>%
+  mutate(Month = 8) %>% 
+  mutate_at(vars(LakeArea,WS.Area,wlconnections_allwetlands_count:RoadDistance),log01) %>%
+  filter(!is.na(WS.Dev.Low))
 
 nrow(allLagos %>% filter(LakeArea >= log(10)))
 
@@ -36,6 +45,7 @@ p1 = ggplot(clLakeLong) + geom_line(aes(x = Year, y = cl, color = resT)) +
   scale_color_viridis_d() +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
   labs(title = 'Changing Residence Time') +
+  ylim(0,45) +
   theme_bw() +
   theme(legend.position="bottom",legend.title=element_blank())
 
@@ -79,6 +89,7 @@ p3 = ggplot(clLake.RDLong) + geom_line(aes(x = Year, y = cl, color = resT)) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
   labs(title = 'Changing Road Density') +
   guides(color=guide_legend(nrow=2)) +
+  ylim(0,45) +
   theme_bw() +
   theme(legend.position="bottom",legend.title=element_blank()) 
 
