@@ -182,7 +182,8 @@ dat.out = dat_rf %>%
   mutate(pred.95 = oob_quantiles$predictions[,3]) %>% 
   mutate(PIspread = pred.95-pred.05) %>% 
   mutate(within = ifelse(Chloride >= pred.05 & Chloride <= pred.95, TRUE, FALSE))
-
+# write_csv(dat.out,'LAGOS_prediction/output_data_datout.csv')
+# dat.out = read_csv('LAGOS_prediction/output_data_datout.csv')
 
 ggplot() + 
   geom_errorbar(aes(ymin=dat.out$pred.05[order(dat.out$pred.50)],
