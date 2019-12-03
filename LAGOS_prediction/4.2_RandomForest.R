@@ -31,7 +31,7 @@ dat <- datin %>% dplyr::filter(Chloride < 10000 & Chloride >=0) %>%
   dplyr::filter(ActivityStartDate > as.Date('1990-01-01')) %>% 
   dplyr::group_by(ActivityStartDate, lagoslakeid) %>%
   dplyr::summarise_if(is.numeric,list(mean) )%>%
-  dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,State))) 
+  dplyr::left_join(distinct(dplyr::select(datin,lagoslakeid,lakeconnection,gnis_name,state_zoneid,state_name))) 
 dat = data.frame(dat)
 
 # Function to take log of columsn 
@@ -121,9 +121,9 @@ rf_model<-ranger(dependent.variable.name='logChloride',
 rf_model
 
 ## Save the model
-# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_09_03.rds")
+# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2019_12_03.rds")
 ## load the model
-rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_09_03.rds")
+# rf_model <- readRDS("./LAGOS_prediction/RFmodel_2019_12_03.rds")
 
 quantiles = c(0.05,0.5,0.95)
 oob_quantiles <- predict(rf_model, type = 'quantiles', quantiles=quantiles)
@@ -138,7 +138,7 @@ summary(lm(rf_model$predictions ~ dat_rf$logChloride))
 
 length(rf_model$predictions[rf_model$predictions < oob_quantiles$predictions[,1]])
 length(rf_model$predictions[rf_model$predictions > oob_quantiles$predictions[,3]])
-(1270+1974)/length(dat_rf$logChloride)
+(967+1616)/length(dat_rf$logChloride)
 
 
 # preds<-predict(rf_model, data=rf_cov,predict.all = T )
@@ -287,7 +287,7 @@ allLagos.out = allLagos %>%
   mutate(prediction.05 = lagos_pred_Aug_PI$predictions[,1]) %>% 
   mutate(prediction.50 = lagos_pred_Aug_PI$predictions[,2]) %>% 
   mutate(prediction.95 = lagos_pred_Aug_PI$predictions[,3]) %>% 
-  dplyr::select(lagoslakeid:MaxDepth,predictionAug:prediction.95) %>% 
+  dplyr::select(lagoslakeid:MaxDepth,state_name,predictionAug:prediction.95) %>% 
   mutate(PIrange = prediction.95-prediction.05) %>% 
   mutate(obsLakes = ifelse(lagoslakeid %in% dat_rf$lagoslakeid,TRUE,FALSE))
 table(allLagos.out$obsLakes)
@@ -350,15 +350,15 @@ table(lakes50$state_zoneid)
 
 lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) #%>% 
   # filter(!lagoslakeid %in% dat_rf$lagoslakeid)
-1930 - 1679
+1824 - 1602
 
-lakes10 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 
+lakes20 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 
 lakes0 = allLagos.out %>% dplyr::filter(exp(prediction.50) < 20) 
 
 2773/nrow(allLagos.out)
 
 nrow(lakes50)/nrow(allLagos.out)
-nrow(lakes10)/nrow(allLagos.out)
+nrow(lakes20)/nrow(allLagos.out)
 nrow(lakes0)/nrow(allLagos.out)
 
 table(lakes50$state_zoneid)

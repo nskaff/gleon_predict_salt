@@ -88,3 +88,4 @@ rdDist_Roads,RoadDistance,rdDist_Interstate,InterstateDistance
 winterseverity,WinterSeverity,rdDist_Roads,RoadDistance
 TonsPerMile,TonsPerMile,winterseverity,WinterSeverity
 actualState,actualState,TonsPerMile,TonsPerMile
+state_name,state_name,state_name,state_name

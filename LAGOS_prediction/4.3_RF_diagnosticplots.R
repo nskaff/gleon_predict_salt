@@ -228,7 +228,7 @@ plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave('LAGOS_prediction/Figure_modelCorMean.png',width = 7,height = 3.5)
 
 # Mean correlation by lake type
-fits1 <- lme4::lmList(pred.50 ~ medianCl | lakeconn, data=dat.out.mean) 
+fits1 <- lme4::lmList(pred.50 ~ log(medianCl) | lakeconn, data=dat.out.mean) 
 fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits1)$r.squared,2)), lakeconn = unique(fits1@groups), 
                    medianCl = 1,
                    pred.50 = 2)
