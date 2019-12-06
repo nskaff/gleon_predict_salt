@@ -257,29 +257,6 @@ for (tree in 1:ntree) {
 node.values.mean = rowMeans(node.values)
 node.values.quantiles = apply(node.values, 1, quantile, probs = c(0.05,0.5,0.95)) # These are the same as quantile function above
 
-#### Hilary testing shit out ############################################
-# t1 = predict(rf_model, data = allLagos.rf[3,], type='response')
-# t1$predictions
-# 
-# t2 = predict(rf_model, data = allLagos.rf[3,],type="quantiles", quantiles=quantiles)
-# t2$predictions
-# 
-# t3 = predict(rf_model, data = allLagos.rf[3,], predict.all = TRUE)
-# quantile(t3$predictions,probs = c(0.05,0.5,0.95))
-# mean(t3$predictions)
-# 
-# #OOB prediction
-# node.values <- rf_model$random.node.values.oob
-# ## New data prediction (https://github.com/imbs-hl/ranger/blob/master/R/predict.R)
-# terminal.nodes <- predict(rf_model, allLagos.rf[3,], type = "terminalNodes")$predictions + 1
-# node.values <- 0 * terminal.nodes
-# for (tree in 1:ntree) {
-#   node.values[, tree] <- rf_model$random.node.values[terminal.nodes[, tree], tree]
-# }
-# 
-# quantile(node.values,probs = c(0.05,0.5,0.95))
-# t(apply(node.values, 1, quantile, quantiles, na.rm=TRUE))
-# mean(node.values)
 ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## 
 allLagos.out = allLagos %>% 
   mutate(predictionAug = lagos_pred_Aug$predictions) %>% 
@@ -348,8 +325,8 @@ lakes100 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 100) %>%
   filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 table(lakes50$state_zoneid)
 
-lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) #%>% 
-  # filter(!lagoslakeid %in% dat_rf$lagoslakeid)
+lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) %>% 
+  filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 1824 - 1602
 
 lakes20 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 

@@ -226,7 +226,7 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
         legend.position=c(.7,.1), legend.direction = "horizontal",
-        legend.margin=margin(c(2,2,0,2)))
+        legend.margin=ggplot2::margin(c(2,2,0,2)))
 # ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
 
 
@@ -260,7 +260,7 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
         legend.position=c(.7,.1), legend.direction = "horizontal",
-        legend.margin=margin(c(0.5,2,0.5,2)))
+        legend.margin=ggplot2::margin(c(0.5,2,0.5,2)))
 
 
 plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')

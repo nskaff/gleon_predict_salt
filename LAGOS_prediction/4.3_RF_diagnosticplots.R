@@ -66,7 +66,8 @@ dev.off()
 # 4) Month of Observations (sup figure) ####
 ggplot(dat_rf) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'darkslategray3', alpha = 0.8) +
   scale_x_continuous(breaks = 1:12) +
-  xlab('Month of Observation') + ylab('Count')
+  xlab('Month of Observation') + ylab('Count') +
+  theme_bw()
 table(dat_rf$Month)
 nrow(dat_rf %>% filter(Month >=5 & Month <= 9))/nrow(dat_rf)
 
@@ -150,20 +151,37 @@ p4 = ggplot(data = allLagos.out) +
 # ggsave(plot = p4, filename = 'LAGOS_prediction/Figure_Predictions_LAGOS_PI.png',width = 7,height = 3.5)
 
 # Plot prediction histogram ##
-p5 = ggplot() + 
+# Find the cutoff for undeveloped lakes 
+useLagos <- allLagos %>% filter(!lagoslakeid %in% dat$lagoslakeid)
+useLagos.rf <- useLagos %>% dplyr::select(colnames(rf_cov))
+unDevLakes = useLagos.rf %>% 
+  filter_at(vars(WS.Dev.Low,WS.Dev.Med,WS.Dev.High,WS.Dev.Open, WS.PastureHay,WS.Crops),all_vars(.<= log(0.001))) %>% 
+  filter(InterstateDistance >= log(100))
+
+quantiles = c(0.05, 0.5, 0.95)
+unDevLakes_PI <- predict(rf_model, data = unDevLakes,type="quantiles", quantiles=quantiles)
+unDevLakes$pred50 = exp(unDevLakes_PI$predictions[,2])
+summary(unDevLakes$pred50)
+
+p5 =
+  ggplot() + 
+  geom_rect(aes(xmin = 0.24, xmax = 6.3,
+              ymin = 0, ymax = 1.5),fill="grey70",alpha=0.2) +
   geom_density(data = allLagos.out, aes(x = exp(prediction.05)), fill = "transparent", linetype = 2, alpha = 0.3, size = 0.3, color = 'grey50') +
   geom_density(data = allLagos.out, aes(x = exp(prediction.95)), fill = "transparent", linetype = 3, alpha = 0.3, size = 0.3, color = 'grey50') +
   geom_density(data = allLagos.out, aes(x = exp(prediction.50)), alpha = 0.3, fill = 'gold') +
+  geom_vline(xintercept = c(6.3),linetype = 2) +
   scale_x_continuous(trans='log10') +
   ylab('Density') + xlab(bquote('Predicted Chloride'~(mg~L^-1))) +
-  # ggtitle("Predicted Chloride Concentrations in Lagos") +
   theme_bw() +
   geom_vline(xintercept = c(230,860),linetype = 2) +
+  # annotate(geom='text',label = 'Natural concentrations: Cl < 10',x = 2, y = 1.45, size = 2.5) +
+  annotate(geom='text',label = 'Cl < 6.3, Undeveloped Lakes',x = 5, y = 1, angle = 90, size = 2.5) +
   annotate(geom='text',label = 'Cl = 230, EPA Chronic chloride toxicity',x = 190, y = 0.7, angle = 90, size = 2.5) +
   annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.7, angle = 90, size = 2.5)
 ggsave(p5,filename = 'LAGOS_prediction/Figure_LAGOShistogram.png', width  = 7, height=3)
 
-plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
+   plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
 ggsave('LAGOS_prediction/Figure_LAGOSpredictions.png',width = 7,height = 5)
 
 
