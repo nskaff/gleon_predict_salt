@@ -34,9 +34,10 @@ ggsave(filename = 'LAGOS_prediction/Map_HighLakes.png',width = 7, height = 4)
 
 # esri_ocean <- paste0('https://services.arcgisonline.com/arcgis/rest/services/',
 #                      'Ocean/World_Ocean_Base/MapServer/tile/${z}/${y}/${x}.jpeg')
-esri_land <- paste0('https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
+esri_land <-    paste0('https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
 esri_streets <- paste0('https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
-
+world_gray <-   paste0('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}.jpeg')
+# world_gray_ref <-   paste0('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/${z}/${y}/${x}.jpeg')
 
 # Chicagoland 
 chicago.map = b %>% 
@@ -44,10 +45,12 @@ chicago.map = b %>%
   filter(nhd_long > -88.5 & nhd_long < -87.5) %>% 
   st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
 
-map.chicago = ggplot(chicago.map) +
-  annotation_map_tile(type = esri_streets, zoom = 10) +  
-  geom_sf( size = 0.8, color = 'black',
+map.chicago = 
+  ggplot(chicago.map) +
+  annotation_map_tile(type = world_gray, zoom = 10) +  
+  geom_sf(size = 0.8, color = 'black',
           show.legend = "point", inherit.aes = FALSE) +
+  annotate('text',x =-87.57, y = 41.9, label = 'Chicago', colour = "grey30", size = 2) +
   theme_bw(base_size = 9) +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank(),
         axis.text.x = element_text(angle = 45, hjust = 1))
@@ -60,9 +63,11 @@ boston.map = b %>%
   st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
 
 map.boston = ggplot(boston.map) +
-  annotation_map_tile(type = esri_streets, zoom = 10) +  
+  annotation_map_tile(type = world_gray, zoom = 10) +  
   geom_sf( size = 0.8, color = 'black',
           show.legend = "point", inherit.aes = FALSE) +
+  annotate('text',x = -71, y = 42.35, label = 'Boston', colour = "grey30", size = 2) +
+  annotate('text',x = -71.25, y = 41.77, label = 'Providence', colour = "grey30", size = 2) +
   theme_bw(base_size = 9) +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank(),
         axis.text.x = element_text(angle = 45, hjust = 1))
@@ -76,6 +81,6 @@ map.boston = ggplot(boston.map) +
 
 mapCombo2 = plot_grid(mapHighLakes, map.chicago, map.boston, labels = c('a', 'b', 'c'), 
                       label_size = 10, nrow = 1,rel_widths = c(0.4,0.3,0.3))
-ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Map_Combo.png',width = 7, height = 2.5)
+ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Map_Combo2.png',width = 7, height = 2.5)
  
 

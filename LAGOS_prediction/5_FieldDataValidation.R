@@ -1,3 +1,5 @@
+library(patchwork)
+
 # allLagos = 
 if (!exists('nhd1')) {
     nhd1 = st_read('~/Dropbox/currentprojects/SaltBayes/LAGOS_GIS/LAGOS_NE_All_Lakes_1ha/',stringsAsFactors = F)
@@ -220,6 +222,8 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
   scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) + 
   scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) +
   scale_fill_viridis_c(direction = -1,name = 'Latitude') +
+  annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
+          round(cor(predictionsNLA$cl, predictionsNLA$pred.Median, use = "complete.obs") ^ 2,2))) +  
   # geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
   theme_bw() +
   theme(#legend.position="bottom",
@@ -256,6 +260,8 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
   scale_y_continuous(trans = log2_trans(), limits = c(0.1,400)) + scale_x_continuous(trans = log2_trans(), limits = c(0.1,400)) +
   theme_bw() +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) +
+  annotate("text",x = 0.5, y = 200, size = 3, label = paste0('r2 = ',
+        round(cor(b.all$pred.Median, b.all$mean, use = "complete.obs") ^ 2,2))) +  
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
@@ -263,6 +269,16 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
         legend.margin=ggplot2::margin(c(0.5,2,0.5,2)))
 
 
-plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
-# ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
+
+
+
+## patchwork: combine grids 
+pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
+# plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
+ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
+
+
+
+
+
  

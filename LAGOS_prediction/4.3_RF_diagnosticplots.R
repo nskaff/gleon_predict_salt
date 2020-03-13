@@ -99,6 +99,9 @@ source("ranger_plot.forestFloor.HD.R")
 ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
 ffra = forestFloor(ff_rf_model,rf_cov,calc_np = T)
 
+varNames = read_csv('LAGOS_prediction/variableNames.csv')
+names = data.frame(Name = names(ffra2$X)) %>% left_join(varNames)
+
 ffra2 = ffra 
 ffra2$X$WS.Dev.LowMed = log(exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med))
 ffra2$importance[23] = ffra2$importance[7] + ffra2$importance[8]
@@ -125,7 +128,7 @@ topside = plot_grid(pvar, p67, nrow = 1, align = 'h', labels = c('a','b'),label_
 Col = fcol.HD(ffra2,1)
 # plot(ffra, plot_seq=c(1,2,3), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
 # pp = plot.forestFloor.HD(ffra,plot_seq=c(1,2,3,5,8,18),cols = Col)
-pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,4,5,6,7,19), cols = Col)
+pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,4,5,6,7,19), cols = Col, varNames = varNames)
 do.call(plot_grid, c(pp, list(nrow = 2, align = 'hv')))
 
 bottomside = do.call(plot_grid, c(pp, list(labels = c('c','d','e','f','g','h'), label_size = 10, nrow = 2, align = 'hv')))
@@ -218,11 +221,11 @@ ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 3)
 # 8*) Mean correlation between lakes (man fig) #### 
 p1 = ggplot(dat.out, aes(x = Chloride, y = exp(pred.50))) +
   geom_point(alpha = 0.8, shape = 21, size = 0.8, fill = viridis_pal()(20)[20]) +
-  # ylim(-3.1,8) + xlim(-3.1,8) +
   xlab(bquote('Observed Chloride'~(mg~L^-1))) + ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
   geom_abline(linetype = 'dashed') +
-  scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
-  annotate("text",x = 2.5, y = 600, size = 3,
+  scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + 
+  scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
+  annotate("text",x = 2.5, y = 650, size = 3,
            label = paste0('r2 = ',
            round(cor(dat.out$pred.50, dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
   labs(title = paste0('Per observation (n = ',nrow(dat.out),')')) +
@@ -234,15 +237,17 @@ p2 = ggplot(dat.out.mean, aes(x = medianCl, y = exp(pred.50))) +
   geom_point(alpha = 0.8, shape = 21, size = 0.8, fill = viridis_pal()(20)[10]) + 
   geom_abline(linetype = 'dashed') +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Median Chloride'~(mg~L^-1))) +
-  scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + scale_x_continuous(trans = log2_trans()) +
-  annotate("text",x = 2.5, y = 600, size = 3,
+  scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + 
+  scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
+  annotate("text",x = 2.5, y = 650, size = 3,
            label = paste0('r2 = ',
            round(cor(dat.out.mean$pred.50, log(dat.out.mean$medianCl), use = "complete.obs") ^ 2,2))) +  
   labs(title = paste0('Per lake (n = ',nrow(dat.out.mean),')')) +
   theme_bw() +
   theme(plot.title = element_text(size=12))
 
-plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
+p1 + p2 + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
+# plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave('LAGOS_prediction/Figure_modelCorMean.png',width = 7,height = 3.5)
 
 # Mean correlation by lake type
