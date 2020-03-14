@@ -45,21 +45,30 @@ plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL, varNames =
     xlabel = varNames[names(x$X)[imp.ind[i]] == varNames$Name,2]
     
     # Graph
-    p[[j]] = ggplot(xplot) + geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols),
-                                        shape = 16, size = 0.7, alpha = 0.7) +
-      scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) +
+    p[[j]] = ggplot(xplot) + 
+      geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols),
+                                        shape = 16, size = 0.7) +
       ylim(min(FCuse), max(FCuse)) +
-      theme_bw(base_size = 8) +
-      ylab('') +
+      theme_bw(base_size = 9) +
+      ylab('Feature Contribution') +
       # theme(axis.title.y=element_blank()) + #axis.title.x=element_blank()
       scale_color_identity() +
-      xlab(label = xlabel)
+      xlab(label = str_wrap(str_replace_all(xlabel, "foo" , " "),width = 25))
+    
+    if (min(exp(xplot$physical.value)) > 1) {
+      p[[j]] = p[[j]] + scale_x_continuous(trans = log2_trans())
+    } else {
+      p[[j]] = p[[j]] + scale_x_continuous(trans = log2_trans(), labels = scales::number_format(accuracy = 0.01))
+    }
+      
   }
   # Plot grid 
-  # do.call(plot_grid, c(p, list(labels = c('A', 'B', 'C','D','E'), label_size = 10, nrow = 2, align = 'hv')))
+  # do.call(plot_grid, c(p, list(labels = c('A', 'B', 'C', 'D', 'E'), label_size = 10, nrow = 2, align = 'hv')))
   return(p)
 }
 
+
+# get colors for plots 
 fcol.HD = function(ff,selCol) {
   
   colM = ff$X #else colM = ff$FCmatrix
@@ -78,7 +87,7 @@ fcol.HD = function(ff,selCol) {
   ###################
   len.colM = box.outliers(sel.colM,limit=Inf) * 19 + 1
   
-  colours = colorRampPalette(brewer.pal(9, 'BrBG'))(20) [len.colM[,1]]
+  colours = rev(colorRampPalette(brewer.pal(9, 'RdYlBu'))(20)) [len.colM[,1]]
   
   return(colours)
 }

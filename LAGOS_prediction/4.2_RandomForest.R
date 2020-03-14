@@ -15,6 +15,7 @@ library(parallel)
 library(devtools)
 library(corrplot)
 library(cowplot)
+library(patchwork)
 
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")

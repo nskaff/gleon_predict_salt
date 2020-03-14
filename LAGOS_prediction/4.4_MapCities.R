@@ -37,7 +37,6 @@ ggsave(filename = 'LAGOS_prediction/Map_HighLakes.png',width = 7, height = 4)
 esri_land <-    paste0('https://services.arcgisonline.com/arcgis/rest/services/NatGeo_World_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
 esri_streets <- paste0('https://services.arcgisonline.com/arcgis/rest/services/World_Street_Map/MapServer/tile/${z}/${y}/${x}.jpeg')
 world_gray <-   paste0('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/${z}/${y}/${x}.jpeg')
-# world_gray_ref <-   paste0('https://services.arcgisonline.com/arcgis/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/${z}/${y}/${x}.jpeg')
 
 # Chicagoland 
 chicago.map = b %>% 
@@ -81,6 +80,6 @@ map.boston = ggplot(boston.map) +
 
 mapCombo2 = plot_grid(mapHighLakes, map.chicago, map.boston, labels = c('a', 'b', 'c'), 
                       label_size = 10, nrow = 1,rel_widths = c(0.4,0.3,0.3))
-ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Map_Combo2.png',width = 7, height = 2.5)
+ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Figure6_Map_Cities.png',width = 7, height = 2.5)
  
 

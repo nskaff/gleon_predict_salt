@@ -1,5 +1,3 @@
-library(patchwork)
-
 # allLagos = 
 if (!exists('nhd1')) {
     nhd1 = st_read('~/Dropbox/currentprojects/SaltBayes/LAGOS_GIS/LAGOS_NE_All_Lakes_1ha/',stringsAsFactors = F)
@@ -272,10 +270,10 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
 
 
 
-## patchwork: combine grids 
-pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
-# plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
-ggsave(filename = 'LAGOS_prediction/Figure_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
+
+# pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
+plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
+ggsave(filename = 'LAGOS_prediction/Figure4_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
 
 
 
