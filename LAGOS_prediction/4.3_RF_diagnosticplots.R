@@ -192,8 +192,8 @@ WSlegend = ggplot() +
 legend <- cowplot::get_legend(WSlegend)
 library(ggpubr) # for as_ggplot function to get legend
 
-pp[[1]] + pp[[2]] + pp[[3]] + pp[[4]] + pp[[5]] + pp[[6]] + pp[[7]] + as_ggplot(legend) + 
-  plot_layout(nrow = 2)
+plot_grid(pp[[1]], pp[[2]], pp[[3]], pp[[4]], pp[[5]], pp[[6]], pp[[7]],as_ggplot(legend),
+          nrow = 2, align = 'h', labels = c('a','b','c','d','e','f','g'),label_size = 10)
 ggsave(filename = 'LAGOS_prediction/Figure2_FeaturePlots.png',width = 7,height = 4)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -288,7 +288,7 @@ p1 = ggplot(dat.out, aes(x = Chloride, y = exp(pred.50))) +
   scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
   annotate("text",x = 2.5, y = 650, size = 3,
            label = paste0('r2 = ',
-           round(cor(dat.out$pred.50, dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
+           round(cor(dat.out$pred.50,dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
   labs(title = paste0('Per observation (n = ',nrow(dat.out),')')) +
   theme_bw() +
   theme(plot.title = element_text(size=12))

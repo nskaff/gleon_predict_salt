@@ -217,11 +217,11 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
   geom_point(aes(fill = nhd_lat), shape = 21) + 
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   # labs(title = 'Predicted NLA chloride') +
-  scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) + 
-  scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.07,220)) +
+  scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) + 
+  scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) +
   scale_fill_viridis_c(direction = -1,name = 'Latitude') +
   annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
-          round(cor(predictionsNLA$cl, predictionsNLA$pred.Median, use = "complete.obs") ^ 2,2))) +  
+          round(cor(log(predictionsNLA$cl + 0.001), log(predictionsNLA$pred.Median+0.001), use = "complete.obs") ^ 2,2))) +  
   # geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
   theme_bw() +
   theme(#legend.position="bottom",
@@ -229,6 +229,10 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
         legend.position=c(.7,.1), legend.direction = "horizontal",
         legend.margin=ggplot2::margin(c(2,2,0,2)))
+
+summary(lm(log(predictionsNLA$cl + 0.001) ~ log(predictionsNLA$pred.Median + 0.001))) # r2 of all observations (log transformed)
+rmsle(predictionsNLA$cl, predictionsNLA$pred.Median, error = 0.001)
+
 # ggsave(filename = 'LAGOS_prediction/Figure_predictions_NLA.png',width = 7, height = 5, units = 'in')
 
 
@@ -245,9 +249,6 @@ b.all = b.WI %>% mutate(State = 'WI') %>%
   bind_rows(b.MN %>% mutate(State = 'MN')) %>% 
   filter(!is.na(pred.Median)) %>% filter(!is.na(mean))
 
-summary(lm(pred.Mean ~ mean, data = b.all)) # r2 = 0.48
-summary(lm(pred.Median ~ mean, data = b.all)) # r2 = 0.50
-
 pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.3) +
   geom_point(shape = 22,alpha = 0.9) + 
@@ -255,20 +256,20 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
   geom_abline(intercept = 0, slope = 1, linetype = 'dashed') +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   # labs(title = 'Predicted chloride concentrations') +
-  scale_y_continuous(trans = log2_trans(), limits = c(0.1,400)) + scale_x_continuous(trans = log2_trans(), limits = c(0.1,400)) +
+  scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) + 
+  scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) +
   theme_bw() +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) +
-  annotate("text",x = 0.5, y = 200, size = 3, label = paste0('r2 = ',
-        round(cor(b.all$pred.Median, b.all$mean, use = "complete.obs") ^ 2,2))) +  
+  annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
+        round(cor(log(b.all$pred.Median+0.001), log(b.all$mean + 0.001), use = "complete.obs") ^ 2,2))) +  
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
         legend.position=c(.7,.1), legend.direction = "horizontal",
         legend.margin=ggplot2::margin(c(0.5,2,0.5,2)))
 
-
-
-
+summary(lm(log(b.all$mean + 0.001) ~ log(b.all$pred.Median + 0.001))) # r2 of all observations (log transformed)
+rmsle(b.all$mean, b.all$pred.Median, error = 0.001)
 
 
 # pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
@@ -276,6 +277,8 @@ plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align 
 ggsave(filename = 'LAGOS_prediction/Figure4_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
 
 
+cor(b.all$pred.Median, b.all$mean, use = "complete.obs") ^ 2
+cor(log(b.all$pred.Median+0.001), log(b.all$mean + 0.001), use = "complete.obs")^2
 
 
 

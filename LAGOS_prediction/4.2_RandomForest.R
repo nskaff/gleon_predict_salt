@@ -17,6 +17,7 @@ library(corrplot)
 library(cowplot)
 library(patchwork)
 
+
 # Load data
 datin = read_csv("LAGOS_prediction/data3_LAGOS_ChlorideCovariates.csv")
 colNames = read_csv('LAGOS_prediction/ColNames.csv')
@@ -129,13 +130,16 @@ rf_model
 quantiles = c(0.05,0.5,0.95)
 oob_quantiles <- predict(rf_model, type = 'quantiles', quantiles=quantiles)
 
+# compare mean to median predictions
 ggplot() + geom_point(aes(x = dat_rf$logChloride, y = oob_quantiles$predictions[,2]), color = 'grey50', alpha = 0.4) +
   geom_point(aes(x = dat_rf$logChloride, y = rf_model$predictions), color = 'red4', alpha = 0.4) +
   ylab('50th percentile RF model') + xlab('Observation Chloride') + 
   theme_bw()
-summary(lm(oob_quantiles$predictions[,2] ~ dat_rf$logChloride))
-summary(lm(rf_model$predictions ~ dat_rf$logChloride))
 
+summary(lm(oob_quantiles$predictions[,2] ~ dat_rf$logChloride)) # r2 of all observations (log transformed)
+summary(lm(exp(oob_quantiles$predictions[,2]) ~ exp(dat_rf$logChloride))) # r2 of all observations (non-log)
+rmsle(exp(oob_quantiles$predictions[,2]),exp(dat_rf$logChloride))
+rmse(exp(oob_quantiles$predictions[,2]),exp(dat_rf$logChloride))
 
 length(rf_model$predictions[rf_model$predictions < oob_quantiles$predictions[,1]])
 length(rf_model$predictions[rf_model$predictions > oob_quantiles$predictions[,3]])
@@ -289,7 +293,13 @@ dat.out.mean = dat.out %>% dplyr::mutate(predicted = as.numeric(pred)) %>%
   mutate(residuals.50 = pred.50 - log(medianCl)) 
 
 table(dat.out.mean$withinPI)
-  
+
+# Fit metrics for median 
+summary(lm(dat.out.mean$pred.50 ~ log(dat.out.mean$medianCl))) # r2 of all observations (log transformed)
+rmsle(exp(dat.out.mean$pred.50), dat.out.mean$medianCl)
+
+
+
 ggplot(dat.out.mean, aes(x = id, y = log(meanCl), color = log(count))) + geom_point(alpha = 0.6) +
   geom_point(aes(y = pred.mean), color = 'red3', alpha = 0.6, size = 0.8) +
   geom_linerange(aes(ymin = log(min), ymax = log(max)), alpha = 0.6) +
