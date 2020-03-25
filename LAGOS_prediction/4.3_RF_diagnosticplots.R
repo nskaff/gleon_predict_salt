@@ -97,6 +97,8 @@ pvar = ggplot(DF, aes(x=w, y=v,fill=v))+
 
 
 # Amend Matrix 
+library(devtools)
+install_github('sorhawell/forestFloor')
 source("ranger_RFadaptor.R")
 source("ranger_plot.forestFloor.HD.R")
 ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
@@ -106,14 +108,15 @@ varNames = read_csv('LAGOS_prediction/variableNames.csv')
 names = data.frame(Name = names(ffra2$X)) %>% left_join(varNames)
 
 ffra2 = ffra 
-ffra2$X$WS.Dev.LowMed = log(exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med))
+ffra2$X$WS.Dev.LowMed = log(exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med)) # log rules 
 ffra2$importance[23] = ffra2$importance[7] + ffra2$importance[8]
 ffra2$FCmatrix = cbind(ffra2$FCmatrix, ffra2$FCmatrix[,"WS.Dev.Low"] + ffra2$FCmatrix[,"WS.Dev.Med"])
 attr(ffra2$FCmatrix,'dimnames')[[2]][23] = 'WS.Dev.LowMed'
 ffra2$imp_ind = order(ffra2$importance,decreasing = T)
 
-# Scatter plot between crops and dev
+# total feature contribution of the three predictors (low + med + crops)
 sum_low_dev_crop <- ffra2$FCmatrix[,"WS.Dev.LowMed"]+ffra2$FCmatrix[,"WS.Crops"]
+# Scatter plot between crops and dev
 p67 = ggplot() +
   geom_rect(aes(xmin = 0.001, xmax = 1, ymin = 0.0005, ymax = 10), linetype = 2, color = 'grey50', fill = NA) +
   geom_rect(aes(xmin = 0.001, xmax = 1, ymin = 20, ymax = 100), linetype = 2, color = 'lightblue3', fill = NA) +
@@ -123,14 +126,42 @@ p67 = ggplot() +
   annotate(geom = 'text',x = 0.0013, y = 75, label = ' 2 ', size = 3, color = 'lightblue3') +
   annotate(geom = 'text',x = 80, y = 0.0007, label = ' 3 ', size = 3, color = 'red1') +
   annotate(geom = 'text',x = 80, y = 75, label = ' 4 ', size = 3, color = 'red4') +
-  geom_point(aes(x=exp(ffra2$X$WS.Dev.LowMed), y=exp(ffra2$X$WS.Crops), fill = sum_low_dev_crop), pch = 21, color = 'grey50') + 
+  # geom_point(aes(x=exp(ffra2$X$WS.Dev.LowMed), y=exp(ffra2$X$WS.Crops), fill = sum_low_dev_crop), pch = 21, color = 'grey50') +
+  geom_point(aes(x=exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med), y=exp(ffra2$X$WS.Crops), fill = sum_low_dev_crop), pch = 21, color = 'grey50') +
   scale_fill_distiller(palette='RdYlBu', direction = -1, name = 'Feature \nContribution') +
   xlab('Watershed Low + Med Development %') + ylab('Watershed Crop %') +
-  scale_y_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) + 
-  scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01)) +
+  scale_y_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01),
+                     breaks = c(0.01, 0.25, 4, 32)) + 
+  scale_x_continuous(trans = log2_trans(),labels = scales::number_format(accuracy = 0.01),
+                     breaks = c(0.01, 0.25, 4, 32)) +
   theme_bw(base_size = 9) +
   theme(legend.text = element_text(size=6),legend.title = element_text(size=6)) 
 p67
+
+obsFC = data.frame(WS.Dev.LowMed = exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med),
+                   WS.Crops = exp(ffra2$X$WS.Crops),
+                   FC.Dev.LowMed = ffra2$FCmatrix[,"WS.Dev.LowMed"],
+                   FC.Crops = ffra2$FCmatrix[,"WS.Crops"]) %>% 
+  mutate(FC.dev_crop = FC.Dev.LowMed + FC.Crops) %>% 
+  mutate(group = case_when(WS.Dev.LowMed < 1 & WS.Crops < 10 ~ '1) Dev < 1%, Crops < 10%', 
+                           WS.Dev.LowMed < 1 & WS.Crops > 20 ~ '2) Dev < 1%, Crops > 20%',
+                           WS.Dev.LowMed > 5 & WS.Crops < 10 ~ '3) Dev > 5%, Crops < 10%',
+                           WS.Dev.LowMed > 5 & WS.Crops > 20 ~ '4) Dev > 5%, Crops > 20%'))
+
+obsFC %>% 
+  group_by(group) %>% 
+  summarize(mean = mean(FC.dev_crop),
+            median = median(FC.dev_crop),
+            q1 = quantile(FC.dev_crop, 0.25),
+            q3 = quantile(FC.dev_crop, 0.75))
+
+ggplot(obsFC) + geom_point(aes(x = WS.Dev.LowMed, y =  FC.Dev.LowMed )) +
+  geom_vline(aes(xintercept = 5)) +
+  scale_x_log10()
+ggplot(obsFC) + geom_point(aes(x = WS.Crops, y =  FC.Crops )) +
+  geom_vline(aes(xintercept = 10)) +
+  scale_x_log10()
+
 
 
 ## Observed density plots ##
@@ -152,6 +183,14 @@ obsDens <- dat %>%
 
 table(obsDens$group,useNA = 'always')
 
+obsDens %>% 
+  group_by(group) %>% 
+  summarize(mean = mean(Chloride),
+            median = median(Chloride),
+            q1 = quantile(Chloride, 0.25),
+            q3 = quantile(Chloride, 0.75))
+
+
 # observed density plot 
 obsDensPlot = ggplot(obsDens) + geom_density(aes(x = Chloride, color = group, fill = group), alpha = 0.2) +
   scale_color_manual(values = c('grey50','lightblue3','red1','red4'), na.translate=FALSE) +
@@ -161,21 +200,26 @@ obsDensPlot = ggplot(obsDens) + geom_density(aes(x = Chloride, color = group, fi
   theme_bw(base_size = 9) +  
   theme(legend.text = element_text(size=6),legend.title = element_blank())
 
+# b) feature contribution plot for dev low and medium 
+pp1 = plot.forestFloor.HD(ffra2,plot_seq=1, cols = rep('lightsteelblue4',nrow(ffra2$X)), 
+                          varNames = varNames, size = 0.2, shape = 16)
+pp1 = pp1[[1]] + geom_vline(aes(xintercept = 5), linetype = 2, color = 'grey20') +
+  geom_hline(aes(yintercept = 0), linetype = 2, color = 'grey20')
+pp1
 
-topside = plot_grid(pvar, p67, nrow = 1, align = 'h', labels = c('a','b'),label_size = 10, rel_widths = c(0.4,0.6))
-bottomside = plot_grid(obsDensPlot,labels = 'c', label_size = 10)
+topside = plot_grid(pvar, p67, nrow = 1, align = 'h', labels = c('a','c'),label_size = 10, rel_widths = c(0.4,0.6))
+bottomside = plot_grid(pp1, obsDensPlot,labels = c('b','d'), label_size = 10, rel_widths = c(0.3,0.7), label_y = c(1.2,1))
 plot_grid(topside, bottomside, label_size = 10, ncol = 1, align = 'v', rel_heights = c(0.6,0.25))
 
 ggsave(filename = 'LAGOS_prediction/Figure1_VariableImportance_ObsDens.png',width = 7,height = 5)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ## 5.5*) Feature contribution plots (man figure) #### 
-
 #Color by most important feature
 Col = fcol.HD(ffra2,1)
 # plot(ffra, plot_seq=c(1,2,3), plot_GOF=F, limitY=F, col=Col, orderByImportance = T, pch = 16)
 # Plot feature contribution plots
-pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,4,5,6,7,8,19), cols = Col, varNames = varNames)
+pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,4,5,6,7,8,19), cols = Col, varNames = varNames, shape = 16, size = 0.7)
 # do.call(plot_grid, c(pp, list(nrow = 2, align = 'hv'))) # plot multiple plots 
 
 # Fake plot just to get legend

@@ -1,7 +1,7 @@
 # https://github.com/sorhawell/forestFloor/blob/master/R/fcol.R
 library(RColorBrewer)
 
-plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL, varNames = NULL) {
+plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL, varNames = NULL, ...) {
   
   if (is.null(cols)) {
     cols = fcol.HD(x,1)
@@ -46,8 +46,7 @@ plot.forestFloor.HD = function(x, plot_seq=c(1,3,4,5,8), cols = NULL, varNames =
     
     # Graph
     p[[j]] = ggplot(xplot) + 
-      geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols),
-                                        shape = 16, size = 0.7) +
+      geom_point(aes(x = exp(physical.value), y = partial.contribution, color = cols), ...) +
       ylim(min(FCuse), max(FCuse)) +
       theme_bw(base_size = 9) +
       ylab('Feature Contribution') +
