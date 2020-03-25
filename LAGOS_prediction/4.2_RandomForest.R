@@ -329,15 +329,15 @@ ggplot(meanLakes_Lagos,aes(x = medianCl,y = exp(prediction.50))) + geom_point() 
   geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
   theme_bw()
 
-# Predictions ####
+# Predictions #### manuscript stats
 lakes230 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 230) %>% 
   filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 lakes100 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 100) %>% 
   filter(!lagoslakeid %in% dat_rf$lagoslakeid)
 table(lakes50$state_zoneid)
-
 lakes50 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 50) %>% 
   filter(!lagoslakeid %in% dat_rf$lagoslakeid)
+
 1824 - 1602
 
 lakes20 = allLagos.out %>% dplyr::filter(exp(prediction.50) >= 20, exp(prediction.50) <= 50) 
@@ -346,13 +346,14 @@ lakes0 = allLagos.out %>% dplyr::filter(exp(prediction.50) < 20)
 2773/nrow(allLagos.out)
 
 nrow(lakes50)/nrow(allLagos.out)
-nrow(lakes20)/nrow(allLagos.out)
-nrow(lakes0)/nrow(allLagos.out)
+nrow(lakes20)/nrow(allLagos.out) # manuscript stats
+nrow(lakes0)/nrow(allLagos.out) # manuscript stats
 
-table(lakes50$state_zoneid)
 summary(dat.out.mean$medianCl)
-summary(exp(undupLakes$prediction.50))
-summary(exp(allLagos.out$prediction.50))
+# Model output 
+summary(exp(dupLakes$prediction.50)) #training lakes prediction
+summary(exp(undupLakes$prediction.50)) #non training lakes prediction
+summary(exp(allLagos.out$prediction.50)) # manuscript stat 
 
 
 

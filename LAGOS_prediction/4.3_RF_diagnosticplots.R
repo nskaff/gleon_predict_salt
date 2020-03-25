@@ -269,7 +269,7 @@ unDevLakes = useLagos.rf %>%
 quantiles = c(0.05, 0.5, 0.95)
 unDevLakes_PI <- predict(rf_model, data = unDevLakes,type="quantiles", quantiles=quantiles)
 unDevLakes$pred50 = exp(unDevLakes_PI$predictions[,2])
-summary(unDevLakes$pred50)
+summary(unDevLakes$pred50) # manuscript stat 
 
 p5 =
   ggplot() + 
