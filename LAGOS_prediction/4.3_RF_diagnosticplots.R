@@ -315,12 +315,13 @@ ggsave(plot = p2, filename = 'LAGOS_prediction/Figure_modelCorMean_Range.png',wi
 
 
 ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
-  # geom_point(aes(x=count, y = residuals), color = 'red3', alpha = 0.6) +
   geom_point(aes(x=count, y = residuals.50), shape = 21, fill = 'lightskyblue4', alpha = 0.6) +
-  ylab(bquote('Log Mean Residual Chloride'~(mg~L^-1))) +
-  xlab('Number of Observations') + 
+  ylab(bquote('Model Residuals'~(mg~L^-1))) +
+  xlab('Number of Observations') +
+  scale_y_continuous(trans = log2_trans(), breaks = c(0.01,0.1,8,512)) +
+  # scale_x_continuous(trans = log2_trans()) +
   theme_bw()
-ggsave('LAGOS_prediction/Figure_ModelResiduals.png',width = 7,height = 3)
+ggsave('LAGOS_prediction/FigureS7_ModelResiduals.png',width = 7,height = 3)
 
 
 # 8*) Mean correlation between lakes (man fig) #### 
@@ -415,33 +416,38 @@ mapResiduals = ggplot(data=dat.out.mean) +
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
-  geom_point(aes(x=long, y=lat, col=abs(residuals.50)), alpha=.6)+
-  scale_color_viridis_c(option="magma",direction = -1,name = 'Residuals (mg/L)', breaks = log(c(2,10,50,150)), labels = c(2,10,50,150)) +
+  geom_point(aes(x=long, y=lat, col=abs(residuals.50)), alpha=.6, size = 0.8, shape = 16) +
+  # scale_color_viridis_c(option="magma",direction = -1,name = 'Residuals (mg/L)', breaks = log(c(2,10,50,150)), labels = c(2,10,50,150)) +
+  scale_color_viridis_c(end = 0.9,option="magma",direction = -1,name = 'Residuals (mg/L)') +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
+mapResiduals
 ggsave(filename = 'LAGOS_prediction/Map_RF_modelResiduals.png',width = 7, height = 4)
 
 # LAGOS region PI interval (no observation lakes)
-mapPI = ggplot(data = allLagos.out %>% filter(obsLakes == FALSE) %>% arrange(desc(PIrange))) + 
+mapPI = ggplot(data = allLagos.out %>% filter(obsLakes == FALSE) %>% arrange(PIrange)) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
   geom_point(aes(x=nhd_long, y=nhd_lat, col=PIrange), alpha=.6, size = 0.4, shape = 16) +
-  scale_color_viridis_c(option="magma",direction = -1, name = 'PI range (mg/L)',breaks = log(c(1,10,100,1000)), labels = c(1,10,100,1000)) +
+  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, name = 'PI range (mg/L)',
+                        breaks = c(0,100,1000,2000)) +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
+mapPI
 ggsave(filename = 'LAGOS_prediction/Map_RF_modelPIinterval.png',width = 7, height = 4)
 
 # LAGOS region all predictions
-mapPred50 = ggplot(data = allLagos.out %>%  arrange(lagoslakeid)) + 
+mapPred50 = ggplot(data = allLagos.out %>%  arrange(prediction.50)) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
   geom_point(aes(x=nhd_long, y=nhd_lat, col = prediction.50), alpha=.6, size = 0.4, shape = 16)+
-  scale_color_viridis_c(option="magma",direction = -1, breaks = log(c(1,10,150,1000)), labels = c(1,10,150,1000), 
+  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, breaks = log(c(1,10,150,1000)), labels = c(1,10,150,1000), 
                         name = 'Predicted Median \nChloride (mg/L)') +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
+mapPred50
 ggsave(filename = 'LAGOS_prediction/Map_RF_modelPredictions.png',width = 7, height = 4)
 
 mapDiag = plot_grid(mapResiduals, mapPI, mapPred50, labels = c('a', 'b', 'c'), label_size = 10, ncol = 1, align = 'v')
@@ -450,7 +456,6 @@ ggsave(plot = mapDiag, filename = 'LAGOS_prediction/FigureS5_Map_diagnostics.png
 
 
 # 13) Outliers = Lake Calhoun, MN is a good example Bde Maka Ska ####
-
 a = dat %>% filter(lagoslakeid ==  1696) #169 ha WS
 p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue,fill = month(ActivityStartDate, label = T)), pch = 21) +
   # geom_point(data = filter(a, ResultMeasureValue < 10),aes(x = ActivityStartDate, y = ResultMeasureValue), 
@@ -483,7 +488,6 @@ p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeas
         legend.text = element_text(size=6),legend.title = element_text(size=6),
         legend.key.height =unit(3,"pt"), legend.key.width =unit(15,"pt"))
   
-
 plot_grid(p14, p13, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave(filename = 'LAGOS_prediction/Figure_Lake1696.png',width = 7, height = 2.5)
  
