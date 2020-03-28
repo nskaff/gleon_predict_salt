@@ -40,18 +40,19 @@ wioverlap = wilakes %>% st_join(nhd1, left=FALSE) %>%
 st_geometry(wioverlap) = NULL
 
 predictionsWI = wioverlap %>% left_join(allLagos.out) %>% 
-  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  mutate(pred.Mean = pred.mean, pred.Median = pred.50) %>%
   # mutate(cldiff = abs(newcl - chloride)) %>% 
   filter(!lagoslakeid %in% dat$lagoslakeid)  # which haven't been used in the model 
 
 b.WI = predictionsWI %>% group_by(lagoslakeid) %>% 
   summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), 
+            median = median(chloride),
             pred.Mean = first(pred.Mean), pred.Median = first(pred.Median)) %>% 
   filter(!is.na(mean) & !is.na(pred.Median))
 
 ggplot(b.WI, alpha = 0.7) + 
   # geom_point(aes(x = mean, y = pred.Mean), color = 'red3') +
-  geom_point(aes(x = mean, y = pred.Median), color = 'navy') +
+  geom_point(aes(x = median, y = pred.Median), color = 'navy') +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.6) +
   geom_abline(intercept = 0, slope = 1) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
@@ -81,18 +82,18 @@ rioverlap = clmean %>% st_join(nhd1, left = FALSE) %>%
 st_geometry(rioverlap) = NULL
 
 predictionsRI = rioverlap %>% left_join(allLagos.out) %>% 
-  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  mutate(pred.Mean = pred.mean, pred.Median = pred.50) %>%
   # mutate(cldiff = abs(newcl - chloride)) %>% 
   filter(!lagoslakeid %in% modeledLakes) # which haven't been used in the model 
 
 b.RI = predictionsRI %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride), 
+  summarise(min = min(chloride), max = max(chloride), mean = mean(chloride),
+            median = median(chloride),
             pred.Mean = first(pred.Mean), pred.Median = first(pred.Median), depth = mean(Zmax__m_)) %>% 
   filter(!is.na(mean) & !is.na(pred.Median))
 
 ggplot(b.RI, alpha = 0.7) + 
-  # geom_point(aes(x = mean, y = pred.Mean), color = 'red3') +
-  geom_point(aes(x = mean, y = pred.Median), color = 'navy') +
+  geom_point(aes(x = median, y = pred.Median), color = 'navy') +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.6) +
   geom_abline(intercept = 0, slope = 1) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
@@ -134,7 +135,7 @@ mnoverlapALL = mnlakes %>% st_join(nhd1, left= FALSE) %>%
   dplyr::select(lagoslakeid = lagoslakei,Lake_Area_,Y_COORD,X_COORD,SYS_LOC_CODE,LOC_DESC,cl,SAMPLE_DATE) #%>%
 
 mnoverlapALL_pred = mnoverlapALL %>% dplyr::left_join(allLagos.out) %>% 
-  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  mutate(pred.Mean = pred.mean, pred.Median = pred.50) %>%
   # mutate(month = month(SAMPLE_DATE)) %>% 
   filter(!is.na(pred.Mean))  
   # filter(month == 8)
@@ -143,13 +144,15 @@ predictionsMN = mnoverlapALL_pred %>% filter(!lagoslakeid %in% dat_rf$lagoslakei
 st_geometry(predictionsMN) = NULL
 
 b.MN = predictionsMN %>% group_by(lagoslakeid) %>% 
-  summarise(min = min(cl), max = max(cl), mean = mean(cl), lakearea = mean(Lake_Area_), pred.Mean = first(pred.Mean), pred.Median = first(pred.Median)) %>% 
+  summarise(min = min(cl), max = max(cl), mean = mean(cl), 
+            median = median(cl),
+            lakearea = mean(Lake_Area_), pred.Mean = first(pred.Mean), pred.Median = first(pred.Median)) %>% 
   filter(!is.na(mean) & !is.na(pred.Median))
 
 library(ggrepel)
 
 ggplot(b.MN, alpha = 0.7) + #geom_point(aes(x = mean, y = pred.Mean), color = 'red3', size = 2, alpha = 0.7) +
-  geom_point(aes(x = mean, y = pred.Median), color = 'navy', size = 2, alpha = 0.7) +
+  geom_point(aes(x = median, y = pred.Median), color = 'navy', size = 2, alpha = 0.7) +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.3) +
   geom_abline(intercept = 0, slope = 1) +
   ylab('Predicted Chloride (mg/L)') + xlab('Observed Chloride (mg/L)') +
@@ -181,7 +184,6 @@ nla12data = read_csv('~/Documents/nla2007_alldata/nla2012_waterchem_wide.csv') %
   dplyr::select(UID,cl = CHLORIDE_RESULT,clflag = CHLORIDE_FLAG)
 nla12 = nla12site %>% inner_join(nla12data) %>% dplyr::select(-UID)
 
-
 nla = nla07 %>% bind_rows(nla12) %>% 
   filter(!is.na(long)) %>% 
   st_as_sf(coords = c('long','lat'),crs = 4326) %>%
@@ -192,23 +194,14 @@ nla.overlap = nla %>% st_join(nhd1, left=F) %>%
 st_geometry(nla.overlap) = NULL
 
 nla.overlap = nla.overlap %>% group_by(lagoslakeid) %>% 
-  summarise_all(list(first)) 
+  summarise_each(funs(if(is.numeric(.)) mean(., na.rm = TRUE) else first(.)))
 
 predictionsNLA = nla.overlap %>% left_join(allLagos.out) %>% 
-  mutate(pred.Mean = exp(predictionAug2), pred.Median = exp(prediction.50)) %>%
+  mutate(pred.Mean = pred.mean, pred.Median = pred.50) %>%
   # mutate(cldiff = abs(newcl - cl)) %>% 
   filter(!lagoslakeid %in% dat$lagoslakeid)  %>%  # which haven't been used in the model 
-  select(lagoslakeid:nhd_long,predictionAug:prediction.95,pred.Mean,pred.Median) %>% 
-  group_by(lagoslakeid) %>% 
-  dplyr::summarise_at(vars(cl,predictionAug:prediction.95,pred.Mean,pred.Median,nhd_lat,nhd_long), mean, na.rm=T) %>% 
-  left_join(distinct(dplyr::select(nla.overlap,lagoslakeid,state,name))) %>% 
+  select(lagoslakeid:nhd_long,pred.mean:pred.50,pred.Mean,pred.Median) %>% 
   filter(!is.na(pred.Median))
-
-fitsO <- lm(prediction.50 ~ log(cl), data = predictionsNLA); summary(fitsO) #r2 = 0.81
-summary(fitsO)
-fitsO = data.frame(r2 = paste0('r2 = ',round(summary(fitsO)$r.squared,2)),
-                   cl = 0.1,
-                   prediction.50 = 100)
 
 # predictionsNLA = predictionsNLA %>% mutate(train = ifelse(state %in% c('MN','WI','NY','VT','MI'),TRUE, FALSE))
 
@@ -222,7 +215,6 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
   scale_fill_viridis_c(direction = -1,name = 'Latitude') +
   annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
           round(cor(log(predictionsNLA$cl + 0.001), log(predictionsNLA$pred.Median+0.001), use = "complete.obs") ^ 2,2))) +  
-  # geom_text(data = fitsO, aes(label = r2),hjust = 1,vjust = 0, color = 'black') +
   theme_bw() +
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
@@ -249,7 +241,7 @@ b.all = b.WI %>% mutate(State = 'WI') %>%
   bind_rows(b.MN %>% mutate(State = 'MN')) %>% 
   filter(!is.na(pred.Median)) %>% filter(!is.na(mean))
 
-pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
+pstates = ggplot(b.all, aes(x = median, y = pred.Median, fill = State)) +
   geom_errorbarh(aes(xmax = min, xmin = max, y = pred.Median), color = 'black',alpha = 0.3) +
   geom_point(shape = 22,alpha = 0.9) + 
   scale_fill_viridis_d() +
@@ -261,24 +253,23 @@ pstates = ggplot(b.all, aes(x = mean, y = pred.Median, fill = State)) +
   theme_bw() +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) +
   annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
-        round(cor(log(b.all$pred.Median+0.001), log(b.all$mean + 0.001), use = "complete.obs") ^ 2,2))) +  
+        round(cor(log(b.all$pred.Median+0.001), log(b.all$median + 0.001), use = "complete.obs") ^ 2,2))) +  
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
         legend.position=c(.7,.1), legend.direction = "horizontal",
-        legend.margin=ggplot2::margin(c(0.5,2,0.5,2)))
-
-summary(lm(log(b.all$mean + 0.001) ~ log(b.all$pred.Median + 0.001))) # r2 of all observations (log transformed)
-rmsle(b.all$mean, b.all$pred.Median, error = 0.001)
-
+        legend.margin=ggplot2::margin(c(0.5,2,0.5,2))); pstates
 
 # pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
 plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave(filename = 'LAGOS_prediction/Figure4_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
 
+#### Fit metrics for median (in manuscript) ####
+log.lm(b.all$median + 0.001,b.all$pred.Median)
+log.lm(predictionsNLA$cl, predictionsNLA$pred.Median)
 
-cor(b.all$pred.Median, b.all$mean, use = "complete.obs") ^ 2
-cor(log(b.all$pred.Median+0.001), log(b.all$mean + 0.001), use = "complete.obs")^2
+rmsle(b.all$median + 0.001,b.all$pred.Median)
+rmsle(predictionsNLA$cl, predictionsNLA$pred.Median)
 
 
 

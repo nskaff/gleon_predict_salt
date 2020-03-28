@@ -7,13 +7,14 @@ states_sf<- st_as_sf(states)
 
 # 12) High lakes (man figure) ####
 b = allLagos.out %>% 
-  filter(prediction.50 > log(50)) %>% 
+  filter(pred.50 > 50) %>% 
   mutate(cols = 
-           case_when(exp(prediction.50) < 100 ~ 1,
-                     exp(prediction.50) >= 100 & exp(prediction.50) <260 ~ 2,
-                     exp(prediction.50) > 260 ~ 3)) %>% 
-  mutate(expCl = exp(prediction.50)) #%>% 
-# st_as_sf(coords = c('nhd_long','nhd_lat'),crs = 4326)
+           case_when(pred.50 < 100 ~ 1,
+                     pred.50 >= 100 & pred.50 <260 ~ 2,
+                     pred.50 > 260 ~ 3)) %>% 
+  mutate(expCl = pred.50) #%>% 
+
+#filter(obsLakes == FALSE)
 
 mapHighLakes = ggplot(data = b %>% filter(obsLakes == FALSE)) +
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
@@ -21,10 +22,10 @@ mapHighLakes = ggplot(data = b %>% filter(obsLakes == FALSE)) +
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], 
           fill="grey90", size = 0.5)+
   geom_point(aes(x=nhd_long, y=nhd_lat), size = 0.8, shape = 16) +
-  # scale_color_viridis_c(option="magma", direction = -1, name = 'Cl (mg/L)')+
   theme_bw(base_size = 9) +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
-ggsave(filename = 'LAGOS_prediction/Map_HighLakes.png',width = 7, height = 4)
+mapHighLakes
+ggsave(filename = 'LAGOS_prediction/Figures/Map_HighLakes.png',width = 7, height = 4)
 
 
 # m = b %>% mapview(zcol = "expCl", layer.name = 'Predicted Chloride (mg/L)')

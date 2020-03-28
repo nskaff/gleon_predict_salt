@@ -18,7 +18,7 @@ ggplot(long_all, aes(x = attribute, y = value, col = group)) + geom_boxplot(outl
   theme(axis.text.x = element_text(angle = 90)) +
   # ylim(-6,7) +
   xlab("") + ylab("Log Value") 
-ggsave('LAGOS_prediction/Figure_CompareObsLagos_logbw.png',width = 7,height = 4)
+ggsave('LAGOS_prediction/FigureS4_CompareObsLagos_logbw.png',width = 7,height = 4)
 
 
 #### 2) PCA Plot of observations vs. Lagos (sup figure) ####
@@ -37,7 +37,7 @@ a + scale_fill_manual(values = c("grey90","darkslategray3"), name = 'Group') +
   scale_color_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
   scale_alpha_manual(values = 0.5, name = 'Group') +
   theme_bw() 
-ggsave('LAGOS_prediction/Figure_PCA.png',width = 7,height = 5)
+ggsave('LAGOS_prediction/FigureS3_PCA.png',width = 7,height = 5)
 
 a = autoplot(prcomp(lagos.pca, center = T, scale = T), data = combo, fill = 'group', alpha = 0.5, colour = 'group', loadings = TRUE,
              loadings.colour = 'black',loadings.label.colour = NA,
@@ -47,7 +47,7 @@ a + scale_fill_manual(values = c("grey90","darkslategray3"), name = 'Group') +
   scale_color_manual(values = c("grey90","darkslategray3"), name = 'Group') + 
   scale_alpha_manual(values = 0.5, name = 'Group') +
   theme_bw() 
-ggsave('LAGOS_prediction/Figure_PCA_nolabels.png',width = 7,height = 4)
+ggsave('LAGOS_prediction/FigureS3_PCA_nolabels.png',width = 7,height = 4)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
   #### 3) Correlation Matrix (sup figure) ####
@@ -57,7 +57,7 @@ dat.group = dat_rf %>% group_by(lagoslakeid) %>%
   dplyr::summarise_if(is.numeric,list(mean)) %>%
   select(names(rf_cov)[-1])
   
-png(file = "LAGOS_prediction/correlationPlot.png",width = 10,height = 10, units = 'in', res = 300)
+png(file = "LAGOS_prediction/FigureS2_correlationPlot.png",width = 10,height = 10, units = 'in', res = 300)
     dat.cor = round(cor(dat.group,use = 'complete.obs'),2)
     # dat.cor = round(cor(dat[,c(8:12,14:30,67:71)],use = 'complete.obs'),2)
     corrplot(dat.cor, method = "ellipse",tl.col = 'black')
@@ -72,7 +72,7 @@ ggplot(dat_rf) + geom_bar(aes(x = month(ActivityStartDate)), fill = 'darkslategr
 table(dat_rf$Month)
 nrow(dat_rf %>% filter(Month >=5 & Month <= 9))/nrow(dat_rf)
 
-ggsave(filename = 'LAGOS_prediction/Figure_observationsMonth.png',width = 4,height = 3)
+ggsave(filename = 'LAGOS_prediction/FigureS6_observationsMonth.png',width = 4,height = 3)
 
 sum(!is.na(allLagos$MaxDepth))
 sum(!is.na(dat_rf %>% group_by(lagoslakeid) %>% summarise(depth = mean(MaxDepth)) %>% 
@@ -81,33 +81,43 @@ sum(!is.na(dat_rf %>% group_by(lagoslakeid) %>% summarise(depth = mean(MaxDepth)
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # 5*) Feature contributions for forestfloor + variable importance (man figure) ####
 #variable importance
-v<-as.numeric(rf_model$variable.importance)
-w<-as.character(names(rf_model$variable.importance))
-DF<-data.frame(w=w,v=as.numeric(v)) %>% arrange(v)
+v <- as.numeric(rf_model$variable.importance)
+w <- as.character(names(rf_model$variable.importance))
+DF <- data.frame(w=w,v=as.numeric(v)) %>% arrange(v)
 DF$w <- factor(DF$w, levels = DF$w)
 
 # variable importance plot 
 pvar = ggplot(DF, aes(x=w, y=v,fill=v))+
   geom_bar(stat="identity", position="dodge") + coord_flip() +
-  scale_fill_gradient(low = 'lightsteelblue3',high = 'lightsteelblue4') +
+  scale_fill_gradient(low = 'lightsteelblue3', high = 'lightsteelblue4') +
   ylab("Variable Importance") + xlab("")+
   theme_bw(base_size = 9) +
   # theme(axis.text = element_text(size=8), axis.title=element_text(size=8)) +
   guides(fill=F)
-
+pvar
+ggsave(pvar,filename = 'LAGOS_prediction/Figures/Figure_ValueSummary.png',width = 6,height = 6)
 
 # Amend Matrix 
-library(devtools)
-install_github('sorhawell/forestFloor')
+# library(devtools)
+# install_github('sorhawell/forestFloor')
+library(forestFloor)
 source("ranger_RFadaptor.R")
 source("ranger_plot.forestFloor.HD.R")
 ff_rf_model <- ranger_RFadaptor(rf_model,dat_rf$logChloride)
 ffra = forestFloor(ff_rf_model,rf_cov,calc_np = T)
+ffra$FCmatrix
+
+# Row sums should add up to predicted value
+rws = rowSums(ffra$FCmatrix)
+rowMeans(ffra$FCmatrix)
+plot(rws, ff_rf_model$predicted)
+abline(0,1)
+lm(ff_rf_model$predicted ~ rws)
 
 varNames = read_csv('LAGOS_prediction/variableNames.csv')
+ffra2 = ffra 
 names = data.frame(Name = names(ffra2$X)) %>% left_join(varNames)
 
-ffra2 = ffra 
 ffra2$X$WS.Dev.LowMed = log(exp(ffra2$X$WS.Dev.Low) + exp(ffra2$X$WS.Dev.Med)) # log rules 
 ffra2$importance[23] = ffra2$importance[7] + ffra2$importance[8]
 ffra2$FCmatrix = cbind(ffra2$FCmatrix, ffra2$FCmatrix[,"WS.Dev.Low"] + ffra2$FCmatrix[,"WS.Dev.Med"])
@@ -162,8 +172,6 @@ ggplot(obsFC) + geom_point(aes(x = WS.Crops, y =  FC.Crops )) +
   geom_vline(aes(xintercept = 10)) +
   scale_x_log10()
 
-
-
 ## Observed density plots ##
 obsDens <- dat %>%
   mutate(Month = month(ActivityStartDate)) %>%
@@ -190,7 +198,6 @@ obsDens %>%
             q1 = quantile(Chloride, 0.25),
             q3 = quantile(Chloride, 0.75))
 
-
 # observed density plot 
 obsDensPlot = ggplot(obsDens) + geom_density(aes(x = Chloride, color = group, fill = group), alpha = 0.2) +
   scale_color_manual(values = c('grey50','lightblue3','red1','red4'), na.translate=FALSE) +
@@ -201,7 +208,7 @@ obsDensPlot = ggplot(obsDens) + geom_density(aes(x = Chloride, color = group, fi
   theme(legend.text = element_text(size=6),legend.title = element_blank())
 
 # b) feature contribution plot for dev low and medium 
-pp1 = plot.forestFloor.HD(ffra2,plot_seq=1, cols = rep('lightsteelblue4',nrow(ffra2$X)), 
+pp1 = plot.forestFloor.HD(ffra2, plot_seq = 1, cols = rep('lightsteelblue4',nrow(ffra2$X)), 
                           varNames = varNames, size = 0.2, shape = 16)
 pp1 = pp1[[1]] + geom_vline(aes(xintercept = 5), linetype = 2, color = 'grey20') +
   geom_hline(aes(yintercept = 0), linetype = 2, color = 'grey20')
@@ -210,7 +217,7 @@ pp1
 topside = plot_grid(pvar, p67, nrow = 1, align = 'h', labels = c('a','c'),label_size = 10, rel_widths = c(0.4,0.6))
 bottomside = plot_grid(pp1, obsDensPlot,labels = c('b','d'), label_size = 10, rel_widths = c(0.3,0.7), label_y = c(1.2,1))
 plot_grid(topside, bottomside, label_size = 10, ncol = 1, align = 'v', rel_heights = c(0.6,0.25))
-
+ 
 ggsave(filename = 'LAGOS_prediction/Figure1_VariableImportance_ObsDens.png',width = 7,height = 5)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
@@ -224,7 +231,7 @@ pp = plot.forestFloor.HD(ffra2,plot_seq=c(1,4,5,6,7,8,19), cols = Col, varNames 
 
 # Fake plot just to get legend
 WSlegend = ggplot() +
-  geom_point(aes(x=exp(ffra2$X$WS.Dev.LowMed), y=ffra2$FCmatrix[, ffra2$imp_ind[1]], 
+  geom_point(aes(x=exp(ffra2$X$WS.Dev.LowMed), y=ffra2$FCmatrix[,ffra2$imp_ind[1]], 
                  fill = (ffra2$X$WS.Dev.LowMed)), pch = 21, color = 'grey50') + 
   scale_fill_distiller(palette='RdYlBu', direction = -1, name = 'WS Low + Med \nDevelopment (%)',
                        breaks= log(c(0.02,0.25,4,64)), labels = c(0.02,0.25,4,64)) +
@@ -238,7 +245,7 @@ library(ggpubr) # for as_ggplot function to get legend
 
 plot_grid(pp[[1]], pp[[2]], pp[[3]], pp[[4]], pp[[5]], pp[[6]], pp[[7]],as_ggplot(legend),
           nrow = 2, align = 'h', labels = c('a','b','c','d','e','f','g'),label_size = 10)
-ggsave(filename = 'LAGOS_prediction/Figure2_FeaturePlots.png',width = 7,height = 4)
+ggsave(filename = 'LAGOS_prediction/Figure2_FCPlots.png',width = 7,height = 4)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # 6*) Prediction intervals of model + LAGOS lakes (man figure) + histogram #####
@@ -260,10 +267,12 @@ p4 = ggplot(data = allLagos.out) +
 
 # Plot prediction histogram ##
 # Find the cutoff for undeveloped lakes 
-useLagos <- allLagos %>% filter(!lagoslakeid %in% dat$lagoslakeid)
-useLagos.rf <- useLagos %>% dplyr::select(colnames(rf_cov))
+useLagos.rf <- allLagos %>% 
+  filter(!lagoslakeid %in% dat$lagoslakeid) %>% 
+  dplyr::select(colnames(rf_cov))
+
 unDevLakes = useLagos.rf %>% 
-  filter_at(vars(WS.Dev.Low,WS.Dev.Med,WS.Dev.High,WS.Dev.Open, WS.PastureHay,WS.Crops),all_vars(.<= log(0.001))) %>% 
+  filter_at(vars(WS.Dev.Low,WS.Dev.Med,WS.Dev.High,WS.Dev.Open,WS.PastureHay,WS.Crops),all_vars(.<= log(0.001))) %>%
   filter(InterstateDistance >= log(100))
 
 quantiles = c(0.05, 0.5, 0.95)
@@ -271,61 +280,48 @@ unDevLakes_PI <- predict(rf_model, data = unDevLakes,type="quantiles", quantiles
 unDevLakes$pred50 = exp(unDevLakes_PI$predictions[,2])
 summary(unDevLakes$pred50) # manuscript stat 
 
-p5 =
-  ggplot() + 
-  geom_rect(aes(xmin = 0.24, xmax = 6.3,
-              ymin = 0, ymax = 1.5),fill="grey70",alpha=0.2) +
-  geom_density(data = allLagos.out, aes(x = exp(prediction.05)), fill = "transparent", linetype = 2, alpha = 0.3, size = 0.3, color = 'grey50') +
-  geom_density(data = allLagos.out, aes(x = exp(prediction.95)), fill = "transparent", linetype = 3, alpha = 0.3, size = 0.3, color = 'grey50') +
-  geom_density(data = allLagos.out, aes(x = exp(prediction.50)), alpha = 0.3, fill = 'gold') +
+p5 = ggplot() + 
+  geom_rect(aes(xmin = 0.05, xmax = 6.3, ymin = 0, ymax = 0.43),fill="grey70",alpha=0.2) +
+  geom_density(data = allLagos.out, aes(x = pred.05), fill = "transparent", linetype = 2, alpha = 0.3, size = 0.3, color = 'grey50') +
+  geom_density(data = allLagos.out, aes(x = pred.95), fill = "transparent", linetype = 3, alpha = 0.3, size = 0.3, color = 'grey50') +
+  geom_density(data = allLagos.out, aes(x = pred.50), alpha = 0.3, fill = 'gold') +
   geom_vline(xintercept = c(6.3),linetype = 2) +
-  scale_x_continuous(trans='log10') +
+  scale_x_continuous(trans = log2_trans()) +
   ylab('Density') + xlab(bquote('Predicted Chloride'~(mg~L^-1))) +
   theme_bw() +
   geom_vline(xintercept = c(230,860),linetype = 2) +
   # annotate(geom='text',label = 'Natural concentrations: Cl < 10',x = 2, y = 1.45, size = 2.5) +
-  annotate(geom='text',label = 'Cl < 6.3, Undeveloped Lakes',x = 5, y = 1, angle = 90, size = 2.5) +
-  annotate(geom='text',label = 'Cl = 230, EPA Chronic chloride toxicity',x = 190, y = 0.7, angle = 90, size = 2.5) +
-  annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.7, angle = 90, size = 2.5)
-ggsave(p5,filename = 'LAGOS_prediction/Figure_LAGOShistogram.png', width  = 7, height=3)
+  annotate(geom='text',label = 'Cl < 15, Undeveloped Lakes',x = 5, y = 0.3, angle = 90, size = 2.5) +
+  annotate(geom='text',label = 'Cl = 230, EPA Chronic chloride toxicity',x = 190, y = 0.25, angle = 90, size = 2.5) +
+  annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.25, angle = 90, size = 2.5)
+p5
+ggsave(p5,filename = 'LAGOS_prediction/Figure5_LAGOShistogram.png', width  = 7, height=3)
 
-   plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
+plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
 ggsave('LAGOS_prediction/Figure_LAGOSpredictions.png',width = 7,height = 5)
 
 
-# 7) ### Plots of mean predictions ####
-library(lme4)
-fits2 <- lm(pred.50 ~ log(medianCl), data = dat.out.mean) 
-fits2 = data.frame(r2 = paste0('r2 = ',round(summary(fits2)$r.squared,2)),
-                   medianCl = 7,
-                   pred.50 = 6)
-
-p2 = ggplot(dat.out.mean, aes(x = log(medianCl), y = pred.50, color = log(count))) + geom_point(alpha = 0.6) +
-  geom_errorbarh(aes(xmin = log(min), xmax = log(max)), alpha = 0.6) +
-  xlab(bquote('Observed Chloride'~(mg~L^-1))) +
-  ylab(bquote('Mean Predicted Chloride'~(mg~L^-1))) +
-  xlim(-3,8) + ylim(-3,8) +
-  scale_color_viridis_c() +
-  geom_abline(linetype = 'dashed') +
-  theme_bw() +
-  geom_text(data = fits2, aes(label = r2),hjust = 1,vjust = -1, color = 'black') 
-
-# plot_grid(p1, p2, labels = c('A: mean', 'B: median'), label_size = 10, nrow = 2, align = 'hv')
-ggsave(plot = p2, filename = 'LAGOS_prediction/Figure_modelCorMean_Range.png',width = 7,height = 3.5)
-
-
-ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
+# 7) ### Figure S7 Model Residuals ####
+res1 = ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
   geom_point(aes(x=count, y = residuals.50), shape = 21, fill = 'lightskyblue4', alpha = 0.6) +
   ylab(bquote('Model Residuals'~(mg~L^-1))) +
   xlab('Number of Observations') +
-  scale_y_continuous(trans = log2_trans(), breaks = c(0.01,0.1,8,512)) +
-  # scale_x_continuous(trans = log2_trans()) +
+  scale_x_continuous(trans = log2_trans()) +
   theme_bw()
-ggsave('LAGOS_prediction/FigureS7_ModelResiduals.png',width = 7,height = 3)
 
+res2 = ggplot(dat.out.mean) + geom_hline(yintercept = 0, linetype = 2) +
+  geom_point(aes(x=count, y = residuals.50), shape = 21, fill = 'lightskyblue4', alpha = 0.6) +
+  ylab(bquote('Model Residuals'~(mg~L^-1))) +
+  xlab('Number of Observations') +
+  ylim(0,50) +
+  scale_x_continuous(trans = log2_trans()) +
+  theme_bw()
+
+plot_grid(res1, res2, labels = c('a', 'b'), label_size = 10, nrow = 2, align = 'v')
+ggsave('LAGOS_prediction/FigureS7_ModelResiduals.png',width = 7,height = 5)
 
 # 8*) Mean correlation between lakes (man fig) #### 
-p1 = ggplot(dat.out, aes(x = Chloride, y = exp(pred.50))) +
+p1 = ggplot(dat.out, aes(x = Chloride, y = pred.50)) +
   geom_point(alpha = 0.8, shape = 21, size = 0.8, fill = viridis_pal()(20)[20]) +
   xlab(bquote('Observed Chloride'~(mg~L^-1))) + ylab(bquote('Predicted Chloride'~(mg~L^-1))) +
   geom_abline(linetype = 'dashed') +
@@ -333,12 +329,12 @@ p1 = ggplot(dat.out, aes(x = Chloride, y = exp(pred.50))) +
   scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
   annotate("text",x = 2.5, y = 650, size = 3,
            label = paste0('r2 = ',
-           round(cor(dat.out$pred.50,dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
+           round(cor(log(dat.out$pred.50),dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
   labs(title = paste0('Per observation (n = ',nrow(dat.out),')')) +
   theme_bw() +
   theme(plot.title = element_text(size=12))
 
-p2 = ggplot(dat.out.mean, aes(x = medianCl, y = exp(pred.50))) + 
+p2 = ggplot(dat.out.mean, aes(x = medianCl, y = pred.50)) + 
   geom_errorbarh(aes(xmin = min, xmax = max), alpha = 0.6, color = 'grey70') +
   geom_point(alpha = 0.8, shape = 21, size = 0.8, fill = viridis_pal()(20)[10]) + 
   geom_abline(linetype = 'dashed') +
@@ -347,7 +343,7 @@ p2 = ggplot(dat.out.mean, aes(x = medianCl, y = exp(pred.50))) +
   scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
   annotate("text",x = 2.5, y = 650, size = 3,
            label = paste0('r2 = ',
-           round(cor(dat.out.mean$pred.50, log(dat.out.mean$medianCl), use = "complete.obs") ^ 2,2))) +  
+           round(cor(log(dat.out.mean$pred.50), log(dat.out.mean$medianCl), use = "complete.obs") ^ 2,2))) +  
   labs(title = paste0('Per lake (n = ',nrow(dat.out.mean),')')) +
   theme_bw() +
   theme(plot.title = element_text(size=12))
@@ -357,21 +353,16 @@ plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave('LAGOS_prediction/Figure3_modelCorMean.png',width = 7,height = 3.5)
 
 # Mean correlation by lake type
-fits1 <- lme4::lmList(pred.50 ~ log(medianCl) | lakeconn, data=dat.out.mean) 
-fits1 = data.frame(r2 = paste0('r2 = ',round(summary(fits1)$r.squared,2)), lakeconn = unique(fits1@groups), 
-                   medianCl = 1,
-                   pred.50 = 2)
 
-ggplot(data = dat.out.mean, aes(x = medianCl, y = exp(pred.50))) + geom_point() + geom_abline(linetype = 'dashed') +
+ggplot(data = dat.out.mean, aes(x = medianCl, y = pred.50)) + geom_point() + geom_abline(linetype = 'dashed') +
   ylab(bquote('Predicted Median Chloride'~(mg~L^-1))) + xlab(bquote('Observed Chloride'~(mg~L^-1))) +
   facet_wrap(~lakeconn) +
   labs(title = paste0('Modeled chloride (n = ',nrow(dat.out.mean),')')) +
   scale_y_continuous(trans = log2_trans()) + scale_x_continuous(trans = log2_trans()) +
-  geom_text(data = fits1, aes(label = r2),hjust = 1,vjust = -1, color = 'black') +
   theme_bw() +
   theme(legend.justification = c(0, 1), legend.position = c(0.02, 0.97),legend.box.background = element_rect(colour = "black")) +
   scale_color_viridis_c(name = "% Forest")
-ggsave(plot = p2,'LAGOS_prediction/Figure_modelCorMean_LakeType.png',width = 6,height = 5)
+ggsave('LAGOS_prediction/Figures/Figure_modelCorMean_LakeType.png',width = 6,height = 5)
 
 # 9) Bar chart: Number of Lakes within CI interval (sup figure) ####
 PerWithin = dat.out.mean %>% 
@@ -388,7 +379,7 @@ ggplot(PerWithin) + geom_bar(aes(x = group, y = perWithin), stat = 'identity') +
   xlab('Number of Observations per Lake') +
   ylab('Percent of lakes with all observations falling within 90% PI') +
   theme_bw()
-ggsave('LAGOS_prediction/Figure_LakesWithinPI.png',width = 6,height = 5)
+ggsave('LAGOS_prediction/Figures/Figure_LakesWithinPI.png',width = 6,height = 5)
 
 # 10)  Box and Whisker of ws values ############# 
 boxplot.df = dat %>% select(WS.OpenWater:WS.EmergentWetlands) %>% 
@@ -399,10 +390,10 @@ ggplot(boxplot.df) + geom_boxplot(aes(parameter,value)) +
 
 # 11) ## Mapping Observational Data ####
 #### Create Mean Chloride DF ####
-obsmap = dat.out.mean %>%
-  st_as_sf(coords = c('long','lat'),crs = 4326)
-m = obsmap %>% mapview(zcol = "medianCl", layer.name = 'Predicted Chloride (mg/L)')
-m
+# obsmap = dat.out.mean %>%
+#   st_as_sf(coords = c('long','lat'),crs = 4326)
+# m = obsmap %>% mapview(zcol = "medianCl", layer.name = 'Predicted Chloride (mg/L)')
+# m
 
 # 11) ## Mapping model output (sup figure) ####
 library(tigris)
@@ -416,39 +407,40 @@ mapResiduals = ggplot(data=dat.out.mean) +
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
-  geom_point(aes(x=long, y=lat, col=abs(residuals.50)), alpha=.6, size = 0.8, shape = 16) +
-  # scale_color_viridis_c(option="magma",direction = -1,name = 'Residuals (mg/L)', breaks = log(c(2,10,50,150)), labels = c(2,10,50,150)) +
-  scale_color_viridis_c(end = 0.9,option="magma",direction = -1,name = 'Residuals (mg/L)') +
+  geom_point(aes(x=long, y=lat, col = log(residuals.50)), alpha=.6, size = 0.8, shape = 16) +
+  scale_color_viridis_c(option="magma",direction = -1,name = 'Residuals (mg/L)', breaks = log(c(1,10,100,1000)), labels = c(1,10,100,1000)) +
+  # scale_color_viridis_c(end = 0.9,option="magma",direction = -1,name = 'Residuals (mg/L)') +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
 mapResiduals
-ggsave(filename = 'LAGOS_prediction/Map_RF_modelResiduals.png',width = 7, height = 4)
+ggsave(filename = 'LAGOS_prediction/Figures/Map_RF_modelResiduals.png',width = 7, height = 4)
 
 # LAGOS region PI interval (no observation lakes)
-mapPI = ggplot(data = allLagos.out %>% filter(obsLakes == FALSE) %>% arrange(PIrange)) + 
+mapPI = ggplot(data = allLagos.out %>% 
+                 arrange(PIrange_log)) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
-  geom_point(aes(x=nhd_long, y=nhd_lat, col=PIrange), alpha=.6, size = 0.4, shape = 16) +
-  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, name = 'PI range (mg/L)',
-                        breaks = c(0,100,1000,2000)) +
+  geom_point(aes(x=nhd_long, y=nhd_lat, col=PIrange_log), alpha=.6, size = 0.4, shape = 16) +
+  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, 
+                        name = 'Log range between \n0.05 and 0.95 \nprediction quantiles') +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
 mapPI
-ggsave(filename = 'LAGOS_prediction/Map_RF_modelPIinterval.png',width = 7, height = 4)
+ggsave(filename = 'LAGOS_prediction/Figures/Map_RF_modelPIinterval.png',width = 7, height = 4)
 
 # LAGOS region all predictions
-mapPred50 = ggplot(data = allLagos.out %>%  arrange(prediction.50)) + 
+mapPred50 = ggplot(data = allLagos.out %>%  arrange(pred.50)) + 
   geom_sf(data=states_sf[states_sf$NAME %in% c('New York','Vermont','New Hampshire','Maine','Rhode Island',
                                                'Iowa','Missouri','Illinois','Ohio','Indiana','Pennsylvania','New Jersey',
                                                'Massachusetts','Connecticut','Wisconsin','Minnesota','Michigan'),], fill="white")+
-  geom_point(aes(x=nhd_long, y=nhd_lat, col = prediction.50), alpha=.6, size = 0.4, shape = 16)+
-  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, breaks = log(c(1,10,150,1000)), labels = c(1,10,150,1000), 
+  geom_point(aes(x=nhd_long, y=nhd_lat, col = log(pred.50)), alpha=.6, size = 0.4, shape = 16)+
+  scale_color_viridis_c(end = 0.9,option="magma",direction = -1, breaks = log(c(1,10,100,1000)), labels = c(1,10,100,1000), 
                         name = 'Predicted Median \nChloride (mg/L)') +
   theme_bw() +
   theme(axis.title.x=element_blank(),axis.title.y=element_blank())
 mapPred50
-ggsave(filename = 'LAGOS_prediction/Map_RF_modelPredictions.png',width = 7, height = 4)
+ggsave(filename = 'LAGOS_prediction/Figures/Map_RF_modelPredictions.png',width = 7, height = 4)
 
 mapDiag = plot_grid(mapResiduals, mapPI, mapPred50, labels = c('a', 'b', 'c'), label_size = 10, ncol = 1, align = 'v')
 ggsave(plot = mapDiag, filename = 'LAGOS_prediction/FigureS5_Map_diagnostics.png',width = 7, height = 9)
@@ -465,7 +457,6 @@ p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue,f
   labs(title = 'Bde Maka Ska, MN') +
   theme_bw() +
   theme(legend.position="none")
-
 
 allLagos.out %>% filter(lagoslakeid == 173) %>% select(prediction.50)
 diamondLake = dat %>% filter(lagoslakeid == 173) # 20 ha, 463 ha WS
@@ -489,6 +480,6 @@ p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeas
         legend.key.height =unit(3,"pt"), legend.key.width =unit(15,"pt"))
   
 plot_grid(p14, p13, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
-ggsave(filename = 'LAGOS_prediction/Figure_Lake1696.png',width = 7, height = 2.5)
+ggsave(filename = 'LAGOS_prediction/Figure7_Lake1696.png',width = 7, height = 2.5)
  
 
