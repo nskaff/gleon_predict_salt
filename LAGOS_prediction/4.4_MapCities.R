@@ -82,5 +82,6 @@ map.boston = ggplot(boston.map) +
 mapCombo2 = plot_grid(mapHighLakes, map.chicago, map.boston, labels = c('a', 'b', 'c'), 
                       label_size = 10, nrow = 1,rel_widths = c(0.4,0.3,0.3))
 ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Figure6_Map_Cities.png',width = 7, height = 2.5)
- 
+ggsave(plot = mapCombo2, filename = 'LAGOS_prediction/Figure6_Map_Cities.pdf',width = 7, height = 2.5)
+
 

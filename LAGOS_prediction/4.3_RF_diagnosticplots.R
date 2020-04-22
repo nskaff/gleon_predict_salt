@@ -219,6 +219,7 @@ bottomside = plot_grid(pp1, obsDensPlot,labels = c('b','d'), label_size = 10, re
 plot_grid(topside, bottomside, label_size = 10, ncol = 1, align = 'v', rel_heights = c(0.6,0.25))
  
 ggsave(filename = 'LAGOS_prediction/Figure1_VariableImportance_ObsDens.png',width = 7,height = 5)
+ggsave(filename = 'LAGOS_prediction/Figure1_VariableImportance_ObsDens.pdf',width = 7,height = 5)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 ## 5.5*) Feature contribution plots (man figure) #### 
@@ -246,6 +247,7 @@ library(ggpubr) # for as_ggplot function to get legend
 plot_grid(pp[[1]], pp[[2]], pp[[3]], pp[[4]], pp[[5]], pp[[6]], pp[[7]],as_ggplot(legend),
           nrow = 2, align = 'h', labels = c('a','b','c','d','e','f','g'),label_size = 10)
 ggsave(filename = 'LAGOS_prediction/Figure2_FCPlots.png',width = 7,height = 4)
+ggsave(filename = 'LAGOS_prediction/Figure2_FCPlots.pdf',width = 7,height = 4)
 
 ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### ### 
 # 6*) Prediction intervals of model + LAGOS lakes (man figure) + histogram #####
@@ -296,9 +298,10 @@ p5 = ggplot() +
   annotate(geom='text',label = 'Cl = 860, EPA Acute chloride toxicity',x = 720, y = 0.25, angle = 90, size = 2.5)
 p5
 ggsave(p5,filename = 'LAGOS_prediction/Figure5_LAGOShistogram.png', width  = 7, height=3)
+ggsave(p5,filename = 'LAGOS_prediction/Figure5_LAGOShistogram.pdf', width  = 7, height=3)
 
 plot_grid(p4,p5, labels = c('a','b'), label_size = 10, ncol = 1, align = 'v',rel_heights = c(0.4,0.6))
-ggsave('LAGOS_prediction/Figure_LAGOSpredictions.png',width = 7,height = 5)
+ggsave('LAGOS_prediction/Figures/Figure_LAGOSpredictions.png',width = 7,height = 5)
 
 
 # 7) ### Figure S7 Model Residuals ####
@@ -351,6 +354,7 @@ p2 = ggplot(dat.out.mean, aes(x = medianCl, y = pred.50)) +
 # p1 + p2 + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10, face = "bold"))
 plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave('LAGOS_prediction/Figure3_modelCorMean.png',width = 7,height = 3.5)
+ggsave('LAGOS_prediction/Figure3_modelCorMean.pdf',width = 7,height = 3.5)
 
 # Mean correlation by lake type
 
@@ -481,5 +485,6 @@ p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeas
   
 plot_grid(p14, p13, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave(filename = 'LAGOS_prediction/Figure7_Lake1696.png',width = 7, height = 2.5)
+ggsave(filename = 'LAGOS_prediction/Figure7_Lake1696.pdf',width = 7, height = 2.5)
  
 

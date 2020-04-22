@@ -263,6 +263,7 @@ pstates = ggplot(b.all, aes(x = median, y = pred.Median, fill = State)) +
 # pstates + pnla + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10))
 plot_grid(pstates, pnla, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave(filename = 'LAGOS_prediction/Figure4_predictions_holdout.png',width = 7, height = 3.5, units = 'in')
+ggsave(filename = 'LAGOS_prediction/Figure4_predictions_holdout.pdf',width = 7, height = 3.5, units = 'in')
 
 #### Fit metrics for median (in manuscript) ####
 log.lm(b.all$median + 0.001,b.all$pred.Median)
