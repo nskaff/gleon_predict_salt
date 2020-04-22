@@ -5,8 +5,8 @@
 # Wright, M. N., and A. Ziegler. 2017. ranger: A Fast Implementation of Random Forests for High Dimensional Data in C++ and R. Journal of Statistical Software:1–17.
 
 # author: Hilary Dugan and Nick Skaff
-# date: 2019-03-28
-# originally run with R version 3.6.3 (2020-02-29)
+# date: 2019-04-22
+# written in R version 3.6.3 (2020-04-22)
 
 library(tidyverse)  # v.1.3.0
 library(ranger)     # v.0.11.2
@@ -21,7 +21,6 @@ log01 <- function(x){log(x + 0.001)} # log of columns
 # Take log of predictor variables 
 dat_rf <- datin %>%
   mutate_at(vars(logChloride = Chloride,LakeArea:RoadDistance),log01)
-
 
 ## Random Forest covariance matrix, with only predictors selected ####
 rf_cov <- dat_rf %>% dplyr::select(Month,LakeArea,WS.Area,WinterSeverity,
@@ -42,7 +41,7 @@ random_lake_samps <- lapply(1:ntree, function(i){
 )
 
 ## Run RF model ####
-rf_model<-ranger(dependent.variable.name='logChloride',
+rf_model <- ranger(dependent.variable.name='logChloride',
                  data=data.frame(logChloride=dat_rf$logChloride,rf_cov),
                  inbag=random_lake_samps,
                  mtry = 4,
@@ -52,7 +51,7 @@ rf_model<-ranger(dependent.variable.name='logChloride',
 rf_model
 
 ## Option to save the model 
-# saveRDS(rf_model, "./LAGOS_prediction/RFmodel_2020_03_28.rds")
+# saveRDS(rf_model, "./RFmodel_2020_03_28.rds")
 
 # Get prediction interval 
 quantiles = c(0.05,0.5,0.95)

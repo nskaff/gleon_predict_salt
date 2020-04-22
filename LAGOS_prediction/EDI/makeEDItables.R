@@ -34,29 +34,24 @@ dat_rf <- dat %>%
 
 sapply(dat_rf, function(x) sum(is.na(x))) # See if there are NA values
 
-## Data output ####
+################## Training lakes dataset ##################
 modelData <- dat_rf %>% dplyr::select(lagoslakeid,nhdid,gnis_name,ActivityStartDate,Chloride:nhd_long,MaxDepth,state_name,
                                       Month,LakeArea,WS.Area,WinterSeverity,
                                    WS.OpenWater:WS.EmergentWetlands,WS.RoadDensity,
                                    InterstateDistance:RoadDistance)
 sapply(modelData, function(x) sum(is.na(x))) # See if there are NA values
 
-
-dat.out = read_csv('LAGOS_prediction/output_data_datout.csv') %>% 
-  mutate(prediction.05 = exp(pred.05),prediction.50 = exp(pred.50),prediction.95 = exp(pred.95)) %>% 
-  select(lagoslakeid,ActivityStartDate,prediction.05:prediction.95) 
-
 # Table description: Training dataset for QRF model, with 29,010 observed chloride concentrations 
-modelData = modelData %>% left_join(dat.out) %>% 
-  select(lagoslakeid,nhdid,gnis_name,nhd_lat,nhd_long,MaxDepth,state_name,ActivityStartDate,Chloride,Month:pred.95)
-head(modelData)
-
 write_csv(modelData,'LAGOS_prediction/EDI/lakeCL_trainingData.csv')
 
+################## Prediction dataset ##################
 # Table description: Lake chloride predictions for 49,432 lakes
-Lagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions.csv') %>% 
-  select(lagoslakeid:LakeArea,WS.Area:state_name,prediction.05:prediction.95) %>% 
-  mutate(prediction.05 = exp(prediction.05),prediction.50 = exp(prediction.50),prediction.95 = exp(prediction.95)) 
+lagos.out = read_csv('LAGOS_prediction/output_data_allLagosPredictions_2020_03_28.csv') %>% 
+  select(-pred.mean, -PIrange, -obsLakes, -Month) %>% 
+  mutate_at(vars(LakeArea,WS.Area,WS.OpenWater:RoadDistance, WinterSeverity),exp) %>% 
+  mutate_at(vars(LakeArea,WS.Area,WS.OpenWater:RoadDistance, WinterSeverity),round, digits = 2)
 
-write_csv(Lagos.out,'LAGOS_prediction/EDI/lakeCL_predictions.csv')
+sapply(lagos.out, function(x) sum(is.na(x))) # See if there are NA values
+
+write_csv(lagos.out,'LAGOS_prediction/EDI/lakeCL_predictions.csv')
 
