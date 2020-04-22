@@ -2,7 +2,7 @@
 # author: "Hilary Dugan"
 # date: "2020-03-27"
 
-install.packages('~/Downloads/ranger_0.11.2.tar.gz', repos = NULL, type="source")
+# install.packages('~/Downloads/ranger_0.11.2.tar.gz', repos = NULL, type="source")
 
 library(forestFloor)
 library(randomForest)
