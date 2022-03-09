@@ -213,9 +213,11 @@ pnla = ggplot(predictionsNLA, aes(x = cl, y = pred.Median)) +
   scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) + 
   scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) +
   scale_fill_viridis_c(direction = -1,name = 'Latitude') +
-  annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
-          round(cor(log(predictionsNLA$cl + 0.001), log(predictionsNLA$pred.Median+0.001), use = "complete.obs") ^ 2,2))) +  
-  theme_bw() +
+  annotate("text",x = 0.5, y = 120, size = 3, 
+           label = paste0("r^2==",
+          round(cor(log(predictionsNLA$cl + 0.001), log(predictionsNLA$pred.Median+0.001), 
+                    use = "complete.obs") ^ 2,2)), parse = T) +  
+  theme_bw(base_size = 9) +
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),
@@ -250,10 +252,12 @@ pstates = ggplot(b.all, aes(x = median, y = pred.Median, fill = State)) +
   # labs(title = 'Predicted chloride concentrations') +
   scale_y_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) + 
   scale_x_continuous(trans = log2_trans(), breaks = c(0,1,10,100), limits = c(0.1,400)) +
-  theme_bw() +
+  theme_bw(base_size = 9) +
   scale_color_manual(name = "legend", values = c('#203731','red3','#4F2683')) +
-  annotate("text",x = 0.5, y = 120, size = 3, label = paste0('r2 = ',
-        round(cor(log(b.all$pred.Median+0.001), log(b.all$median + 0.001), use = "complete.obs") ^ 2,2))) +  
+  annotate("text",x = 0.5, y = 120, size = 3, 
+           label = paste0("r^2==",
+        round(cor(log(b.all$pred.Median+0.001), log(b.all$median + 0.001), 
+                  use = "complete.obs") ^ 2,2)), parse = TRUE) +  
   theme(#legend.position="bottom",
         legend.background = element_rect(colour = 'black', fill = 'white', linetype='solid', size = 0.1),
         legend.text=element_text(size=6), legend.title = element_text(size = 6),

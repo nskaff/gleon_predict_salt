@@ -290,7 +290,7 @@ p5 = ggplot() +
   geom_vline(xintercept = c(6.3),linetype = 2) +
   scale_x_continuous(trans = log2_trans()) +
   ylab('Density') + xlab(bquote('Predicted Chloride'~(mg~L^-1))) +
-  theme_bw() +
+  theme_bw(base_size = 9) +
   geom_vline(xintercept = c(230,860),linetype = 2) +
   # annotate(geom='text',label = 'Natural concentrations: Cl < 10',x = 2, y = 1.45, size = 2.5) +
   annotate(geom='text',label = 'Cl < 15, Undeveloped Lakes',x = 5, y = 0.3, angle = 90, size = 2.5) +
@@ -330,12 +330,13 @@ p1 = ggplot(dat.out, aes(x = Chloride, y = pred.50)) +
   geom_abline(linetype = 'dashed') +
   scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + 
   scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
-  annotate("text",x = 2.5, y = 650, size = 3,
-           label = paste0('r2 = ',
-           round(cor(log(dat.out$pred.50),dat.out$logChloride, use = "complete.obs") ^ 2,2))) +
+  annotate("text",x = 2.5, y = 650, size = 2.5,
+           label = paste0("r^2==",
+           round(cor(log(dat.out$pred.50),dat.out$logChloride, 
+                     use = "complete.obs") ^ 2,2)), parse = TRUE) +
   labs(title = paste0('Per observation (n = ',nrow(dat.out),')')) +
-  theme_bw() +
-  theme(plot.title = element_text(size=12))
+  theme_bw(base_size = 9) +
+  theme(plot.title = element_text(size=9))
 
 p2 = ggplot(dat.out.mean, aes(x = medianCl, y = pred.50)) + 
   geom_errorbarh(aes(xmin = min, xmax = max), alpha = 0.6, color = 'grey70') +
@@ -344,12 +345,13 @@ p2 = ggplot(dat.out.mean, aes(x = medianCl, y = pred.50)) +
   ylab(bquote('Predicted Chloride'~(mg~L^-1))) + xlab(bquote('Observed Median Chloride'~(mg~L^-1))) +
   scale_y_continuous(trans = log2_trans(),limits = c(0.1,3000)) + 
   scale_x_continuous(trans = log2_trans(),limits = c(0.1,3000)) +
-  annotate("text",x = 2.5, y = 650, size = 3,
-           label = paste0('r2 = ',
-           round(cor(log(dat.out.mean$pred.50), log(dat.out.mean$medianCl), use = "complete.obs") ^ 2,2))) +  
+  annotate("text",x = 2.5, y = 650, size = 2.5,
+           label = paste0("r^2==",
+           round(cor(log(dat.out.mean$pred.50), log(dat.out.mean$medianCl), 
+                     use = "complete.obs") ^ 2,2)), parse=TRUE) +  
   labs(title = paste0('Per lake (n = ',nrow(dat.out.mean),')')) +
-  theme_bw() +
-  theme(plot.title = element_text(size=12))
+  theme_bw(base_size = 9) +
+  theme(plot.title = element_text(size=9))
 
 # p1 + p2 + plot_annotation(tag_levels = 'a') & theme(plot.tag = element_text(size = 10, face = "bold"))
 plot_grid(p1, p2, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
@@ -457,12 +459,14 @@ p13 = ggplot(a) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue,f
   # geom_point(data = filter(a, ResultMeasureValue < 10),aes(x = ActivityStartDate, y = ResultMeasureValue), 
              # fill = 'gold', size = 3,pch = 23) +
   scale_fill_viridis_d(name = '') +
-  xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
+  # xlab('Observation Date') + 
+  ylab(bquote('Chloride'~(mg~L^-1))) +
   labs(title = 'Bde Maka Ska, MN') +
-  theme_bw() +
-  theme(legend.position="none")
+  theme_bw(base_size = 9) +
+  theme(legend.position="none") +
+  theme(plot.title = element_text(size=9), axis.title.x = element_blank())
 
-allLagos.out %>% filter(lagoslakeid == 173) %>% select(prediction.50)
+allLagos.out %>% filter(lagoslakeid == 173) %>% select(pred.50)
 diamondLake = dat %>% filter(lagoslakeid == 173) # 20 ha, 463 ha WS
 mean(diamondLake$Chloride)
 range(diamondLake$Chloride)
@@ -472,19 +476,21 @@ ggplot(diamondLake) + geom_point(aes(x = month(ActivityStartDate), y = Chloride)
 
 p14 = ggplot(diamondLake) + geom_point(aes(x = ActivityStartDate, y = ResultMeasureValue, fill = month(ActivityStartDate, label = T)), pch = 21) +
   scale_fill_viridis_d(name = '') +
-  xlab('Observation Date') + ylab(bquote('Chloride'~(mg~L^-1))) +
+  # xlab('Observation Date') + 
+  ylab(bquote('Chloride'~(mg~L^-1))) +
   xlim(as.Date('2003-01-01'),NA) +
   labs(title = 'Diamond Lake, MN') +
-  theme_bw() +
+  theme_bw(base_size = 9) +
   guides(fill=guide_legend(nrow = 5)) +
   theme(legend.box.background = element_rect(colour = "black"),
         legend.position=c(.75,.8),
         legend.direction="horizontal",
         legend.text = element_text(size=6),legend.title = element_text(size=6),
-        legend.key.height =unit(3,"pt"), legend.key.width =unit(15,"pt"))
+        legend.key.height =unit(3,"pt"), legend.key.width =unit(15,"pt")) +
+  theme(plot.title = element_text(size=9), axis.title.x = element_blank())
   
 plot_grid(p14, p13, labels = c('a', 'b'), label_size = 10, nrow = 1, align = 'h')
 ggsave(filename = 'LAGOS_prediction/Figure7_Lake1696.png',width = 7, height = 2.5)
 ggsave(filename = 'LAGOS_prediction/Figure7_Lake1696.pdf',width = 7, height = 2.5)
- 
+  
 
